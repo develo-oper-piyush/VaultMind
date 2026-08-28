@@ -280,8 +280,15 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             <ThemeToggle />
             <Link
+              href="/photos"
+              className="px-4 py-2 bg-card border border-border/80 hover:bg-accent text-foreground text-sm font-medium rounded-xl transition-all flex items-center gap-2 shadow-sm"
+            >
+              <ImageIcon className="w-4 h-4 text-primary" />
+              <span>Photos Carousel</span>
+            </Link>
+            <Link
               href="/profile"
-              className="px-4 py-2 bg-card border border-border hover:bg-accent text-foreground text-sm font-medium rounded-xl transition-all flex items-center gap-2 shadow-sm"
+              className="px-4 py-2 bg-card border border-border/80 hover:bg-accent text-foreground text-sm font-medium rounded-xl transition-all flex items-center gap-2 shadow-sm"
             >
               <PersonIcon className="w-4 h-4 text-primary" />
               <span>Profile</span>
