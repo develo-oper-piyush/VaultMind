@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 // API Client
 class ApiClient {
@@ -26,10 +26,25 @@ class ApiClient {
 
     try {
       const response = await fetch(url, config);
-      const data = await response.json();
+      const contentType = response.headers.get('content-type');
+
+      let data: any;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        if (!response.ok) {
+          throw new Error(`Backend server error (HTTP ${response.status}). Please check backend API server.`);
+        }
+        const text = await response.text();
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { message: text };
+        }
+      }
 
       if (!response.ok) {
-        throw new Error(data.error || 'An error occurred');
+        throw new Error(data.error || data.message || `Request failed with status ${response.status}`);
       }
 
       return data as T;
@@ -37,7 +52,7 @@ class ApiClient {
       if (error instanceof Error) {
         throw error;
       }
-      throw new Error('Network error');
+      throw new Error('Network error connecting to backend API');
     }
   }
 

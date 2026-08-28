@@ -58,9 +58,20 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
     }, [isImage, isDocument, isVideo, isAudio, file.category]);
 
     const fileUrl = React.useMemo(() => {
-      if (file.url?.startsWith("http")) return file.url;
+      let rawUrl = file.url;
+      if (rawUrl && rawUrl.includes("localhost:3000")) {
+        rawUrl = rawUrl.replace("localhost:3000", "localhost:5000");
+      }
+      if (rawUrl?.startsWith("http")) return rawUrl;
       return apiClient.getFileUrl(file.name);
     }, [file]);
+
+    const handleCardClick = (e: React.MouseEvent) => {
+      if ((e.target as HTMLElement).closest('.dropdown')) {
+        return;
+      }
+      window.open(fileUrl, '_blank', 'noopener,noreferrer');
+    };
 
     const handleCopyLink = (e: React.MouseEvent) => {
       e.preventDefault();
@@ -87,8 +98,9 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
             boxShadow: `0 0 40px -15px hsl(var(--theme-color) / 0.45)`,
           } as React.CSSProperties
         }
+        onClick={handleCardClick}
         className={cn(
-          "group relative w-full rounded-2xl overflow-hidden shadow-lg transition-all duration-500 ease-in-out group-hover:scale-105 group-hover:shadow-[0_0_60px_-15px_hsl(var(--theme-color)/0.6)] border border-border/40 flex flex-col justify-between min-h-[320px]",
+          "group relative w-full rounded-2xl overflow-hidden shadow-lg transition-all duration-500 ease-in-out group-hover:scale-105 group-hover:shadow-[0_0_60px_-15px_hsl(var(--theme-color)/0.6)] border border-border/40 flex flex-col justify-between min-h-[320px] cursor-pointer",
           className
         )}
         {...props}
@@ -178,16 +190,17 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
             )}
           </div>
 
-          {/* Bottom Bar: Explore Now button & DaisyUI Dropdown */}
+          {/* Bottom Bar: View Now button & DaisyUI Dropdown */}
           <div className="mt-6 flex items-center gap-3 pt-2">
-            {/* Explore / Open Now Button */}
+            {/* View / Open Now Button */}
             <a
               href={fileUrl}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
               className="flex-1 flex items-center justify-between bg-[hsl(var(--theme-color)/0.3)] backdrop-blur-md border border-white/20 text-white rounded-xl px-4 py-3 transition-all duration-300 group-hover:bg-[hsl(var(--theme-color)/0.5)] group-hover:border-white/40 shadow-md"
             >
-              <span className="text-xs font-semibold tracking-wide">Explore Now</span>
+              <span className="text-xs font-semibold tracking-wide">View Now</span>
               <ArrowRightIcon className="h-4 w-4 transform transition-transform duration-300 group-hover:translate-x-1" />
             </a>
 

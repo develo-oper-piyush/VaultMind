@@ -26,6 +26,10 @@ import {
   DotsVerticalIcon,
   ReaderIcon,
 } from '@radix-ui/react-icons';
+import {
+  ScrollProgressProvider,
+  ScrollProgress,
+} from '@/components/animate-ui/primitives/animate/scroll-progress';
 
 export default function Dashboard() {
   const { user, logout, loading: authLoading } = useAuth();
@@ -196,65 +200,70 @@ export default function Dashboard() {
   // Full Page Skeleton Loading state
   if (authLoading || (fetchingFiles && files.length === 0)) {
     return (
-      <div className="min-h-screen bg-background text-foreground font-sans p-6 md:p-10">
-        <div className="max-w-7xl mx-auto space-y-8">
-          {/* Header Skeleton */}
-          <div className="flex justify-between items-center pb-6 border-b border-border/60">
-            <div className="flex items-center gap-3">
-              <Skeleton className="w-10 h-10 rounded-xl" />
-              <div className="space-y-2">
-                <Skeleton className="h-6 w-48" />
-                <Skeleton className="h-3 w-64" />
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <Skeleton className="h-10 w-24 rounded-xl" />
-              <Skeleton className="h-10 w-24 rounded-xl" />
-            </div>
-          </div>
-
-          {/* Search & Upload Bar Skeleton */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Skeleton className="h-12 flex-1 rounded-xl" />
-            <Skeleton className="h-12 w-36 rounded-xl" />
-          </div>
-
-          {/* Filter Pills Skeleton */}
-          <div className="flex gap-3 flex-wrap">
-            <Skeleton className="h-9 w-36 rounded-xl" />
-            <Skeleton className="h-9 w-36 rounded-xl" />
-            <Skeleton className="h-9 w-36 rounded-xl" />
-          </div>
-
-          {/* Cards Grid Skeleton */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="p-6 bg-card/40 border border-border/60 rounded-2xl space-y-4">
-                <div className="flex justify-between items-center">
-                  <Skeleton className="h-5 w-20 rounded-full" />
-                  <Skeleton className="h-5 w-16 rounded-full" />
-                </div>
-                <Skeleton className="h-6 w-3/4" />
-                <div className="flex gap-2">
-                  <Skeleton className="h-5 w-16 rounded-md" />
-                  <Skeleton className="h-5 w-16 rounded-md" />
-                  <Skeleton className="h-5 w-16 rounded-md" />
-                </div>
-                <Skeleton className="h-14 w-full rounded-xl" />
-                <div className="flex gap-2 pt-2 border-t border-border/40">
-                  <Skeleton className="h-9 flex-1 rounded-xl" />
-                  <Skeleton className="h-9 w-20 rounded-xl" />
+      <ScrollProgressProvider global>
+        <ScrollProgress className="fixed top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-primary via-emerald-400 to-teal-300 z-[100] origin-left shadow-[0_0_12px_rgba(16,185,129,0.7)]" />
+        <div className="min-h-screen bg-background text-foreground font-sans p-6 md:p-10">
+          <div className="max-w-7xl mx-auto space-y-8">
+            {/* Header Skeleton */}
+            <div className="flex justify-between items-center pb-6 border-b border-border/60">
+              <div className="flex items-center gap-3">
+                <Skeleton className="w-10 h-10 rounded-xl" />
+                <div className="space-y-2">
+                  <Skeleton className="h-6 w-48" />
+                  <Skeleton className="h-3 w-64" />
                 </div>
               </div>
-            ))}
+              <div className="flex gap-3">
+                <Skeleton className="h-10 w-24 rounded-xl" />
+                <Skeleton className="h-10 w-24 rounded-xl" />
+              </div>
+            </div>
+
+            {/* Search & Upload Bar Skeleton */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Skeleton className="h-12 flex-1 rounded-xl" />
+              <Skeleton className="h-12 w-36 rounded-xl" />
+            </div>
+
+            {/* Filter Pills Skeleton */}
+            <div className="flex gap-3 flex-wrap">
+              <Skeleton className="h-9 w-36 rounded-xl" />
+              <Skeleton className="h-9 w-36 rounded-xl" />
+              <Skeleton className="h-9 w-36 rounded-xl" />
+            </div>
+
+            {/* Cards Grid Skeleton */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="p-6 bg-card/40 border border-border/60 rounded-2xl space-y-4">
+                  <div className="flex justify-between items-center">
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                  <Skeleton className="h-6 w-3/4" />
+                  <div className="flex gap-2">
+                    <Skeleton className="h-5 w-16 rounded-md" />
+                    <Skeleton className="h-5 w-16 rounded-md" />
+                    <Skeleton className="h-5 w-16 rounded-md" />
+                  </div>
+                  <Skeleton className="h-14 w-full rounded-xl" />
+                  <div className="flex gap-2 pt-2 border-t border-border/40">
+                    <Skeleton className="h-9 flex-1 rounded-xl" />
+                    <Skeleton className="h-9 w-20 rounded-xl" />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      </ScrollProgressProvider>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans p-6 md:p-10">
+    <ScrollProgressProvider global>
+      <ScrollProgress className="fixed top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-primary via-emerald-400 to-teal-300 z-[100] origin-left shadow-[0_0_12px_rgba(16,185,129,0.7)]" />
+      <div className="min-h-screen bg-background text-foreground font-sans p-6 md:p-10">
       <div className="max-w-7xl mx-auto">
         {/* Top Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-6 border-b border-border/60">
@@ -469,5 +478,6 @@ export default function Dashboard() {
         </div>
       </div>
     </div>
-  );
+  </ScrollProgressProvider>
+);
 }
