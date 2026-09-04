@@ -1,6 +1,10 @@
 // Load environment variables FIRST before any other imports
 const dotenv = require("dotenv");
-dotenv.config();
+const path = require("path");
+
+dotenv.config({
+    path: [path.join(__dirname, ".env"), path.join(__dirname, "env")],
+});
 
 const express = require("express");
 const userRouter = require("./routes/user.routes");
@@ -24,11 +28,11 @@ app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Credentials", "true");
     res.setHeader(
         "Access-Control-Allow-Methods",
-        "GET, POST, PUT, DELETE, OPTIONS"
+        "GET, POST, PUT, DELETE, OPTIONS",
     );
     res.setHeader(
         "Access-Control-Allow-Headers",
-        "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+        "Origin, X-Requested-With, Content-Type, Accept, Authorization",
     );
     if (req.method === "OPTIONS") {
         return res.sendStatus(200);
@@ -66,7 +70,9 @@ app.use((err, req, res, next) => {
 
     res.status(err.status || 500).json({
         success: false,
-        error: err.message || "An unexpected error occurred. Please try again later.",
+        error:
+            err.message ||
+            "An unexpected error occurred. Please try again later.",
     });
 });
 
