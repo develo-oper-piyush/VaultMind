@@ -119,6 +119,41 @@ Open **`http://localhost:3001`** in your browser!
 
 ---
 
+## 🐳 Docker Setup & Containerized Running
+
+Containerizing VaultMind eliminates local runtime and dependency mismatches (e.g. Node version or native binary issues) by isolating both Frontend and Backend into standardized Node 20 LTS environments.
+
+### Prerequisites
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running on your system.
+
+### Quick Start with Docker Compose
+
+1. **Environment Setup**: Ensure your backend environment variables are set in `Backend/.env` (or refer to `.env.docker.example` for details).
+
+2. **Build and Run Containers**:
+   ```bash
+   docker compose up --build
+   ```
+
+3. **Access Applications**:
+   - **Frontend UI**: [http://localhost:3000](http://localhost:3000)
+   - **Backend REST API**: [http://localhost:5000](http://localhost:5000)
+
+4. **Stop Containers**:
+   ```bash
+   docker compose down
+   ```
+
+### Development Mode with Docker
+
+For hot-reloading code changes inside Docker containers:
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+---
+
+
 ## 🌐 Deployment (Vercel & Render)
 
 Both **Frontend** and **Backend** can be deployed from this single repository by configuring the **Root Directory** setting:
