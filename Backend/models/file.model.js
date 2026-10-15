@@ -60,8 +60,20 @@ const fileSchema = new mongoose.Schema({
         type: String,
         default: null,
     },
+    chunkCount: {
+        type: Number,
+        default: 0,
+    },
     processingStatus: {
         textExtracted: {
+            type: Boolean,
+            default: false,
+        },
+        chunked: {
+            type: Boolean,
+            default: false,
+        },
+        indexed: {
             type: Boolean,
             default: false,
         },

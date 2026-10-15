@@ -1,0 +1,26 @@
+# Root .gitignore for VaultMind
+node_modules/
+.env
+.env.*
+!.env.docker.example
+!.env.example
+*.pem
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Next.js / Frontend builds
+Frontend/.next/
+Frontend/out/
+Frontend/build/
+*.tsbuildinfo
+
+# Operating system
+.DS_Store
+Thumbs.db
+
+# Test uploads / scratch files
+scratch/
+test-uploads/
+coverage/

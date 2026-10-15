@@ -132,6 +132,49 @@ class ApiClient {
   getFileUrl(fileName: string) {
     return `${this.baseURL}/files/secure-file/${encodeURIComponent(fileName)}`;
   }
+
+  // Ask VaultMind Document Chat Endpoints
+  async askDocumentQuestion(payload: {
+    question: string;
+    conversationId?: string;
+    fileFilters?: string[];
+  }) {
+    return this.request<{
+      answer: string;
+      citations: any[];
+      conversationId: string;
+      retrievedChunksCount: number;
+      grounded: boolean;
+    }>('/chat/ask', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getChatHistory(conversationId?: string) {
+    const query = conversationId ? `?conversationId=${encodeURIComponent(conversationId)}` : '';
+    return this.request<{
+      messages: any[];
+      conversationId: string;
+    }>(`/chat/history${query}`);
+  }
+
+  async clearChatHistory(conversationId?: string) {
+    return this.request<{
+      success: boolean;
+      message: string;
+    }>('/chat/clear', {
+      method: 'POST',
+      body: JSON.stringify({ conversationId }),
+    });
+  }
+
+  async getDocumentChunks(fileId: string) {
+    return this.request<{
+      chunks: any[];
+      totalChunks: number;
+    }>(`/files/chunks/${fileId}`);
+  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);
