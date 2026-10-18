@@ -2,6 +2,7 @@ const express = require("express");
 const supabase = require("../config/supabase");
 const authMiddleware = require("../middlewares/auth.middleware");
 const File = require("../models/file.model");
+const DocumentChunk = require("../models/documentChunk.model");
 const {
     extractTextFromBuffer,
     extractKeywords,
@@ -9,12 +10,16 @@ const {
 const { generateTagsAndCategory } = require("../utils/aiTagger");
 const { generateSummary } = require("../utils/aiSummarizer");
 const { searchFiles } = require("../utils/searchEngine");
+const {
+    validateUploadFile,
+    MAX_FILE_SIZE,
+    SUPPORTED_DOCUMENT_EXTENSIONS,
+} = require("../utils/fileValidator");
 
 const router = express.Router();
 
 // Constants for limits
 const MAX_FILES_PER_USER = 12;
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
 
 router.get("/", (req, res) => {
     res.json({ message: "API is running. Please use the frontend application." });
@@ -63,18 +68,23 @@ router.get("/home", authMiddleware, async (req, res) => {
             const meta = metadataMap[file.name] || {};
             return {
                 name: file.name,
+                originalName: meta.originalName || file.name,
                 fullPath: `${userId}/${file.name}`,
                 url: `${baseUrl}/files/secure-file/${encodeURIComponent(file.name)}`,
                 createdAt: file.created_at,
-                size: file.metadata?.size || 0,
-                mimetype: file.metadata?.mimetype || "unknown",
+                size: file.metadata?.size || meta.size || 0,
+                mimetype: file.metadata?.mimetype || meta.mimetype || "unknown",
+                chunkCount: meta.chunkCount || 0,
                 tags: meta.tags || [],
                 category: meta.category || "Other",
                 summary: meta.summary || null,
                 processingStatus: meta.processingStatus || {
                     textExtracted: false,
+                    chunked: false,
+                    indexed: false,
                     tagged: false,
                     summarized: false,
+                    error: null,
                 },
                 _id: meta._id || null,
             };
@@ -151,35 +161,39 @@ const processFileInBackground = async (fileDoc, fileBuffer) => {
     }
 };
 
-// Upload file route
+// Upload file route with comprehensive validation
 router.post("/upload-file", authMiddleware, async (req, res) => {
     try {
         if (!req.files || !req.files.file) {
-            return res.status(400).send("No file uploaded");
+            return res.status(400).json({
+                success: false,
+                error: "No file uploaded. Please select a file to upload.",
+            });
         }
 
         const file = req.files.file;
         const userId = req.user.userId;
 
-        // Check file size limit (5MB)
-        if (file.size > MAX_FILE_SIZE) {
-            return res
-                .status(400)
-                .send(
-                    `File size exceeds limit of ${
-                        MAX_FILE_SIZE / (1024 * 1024)
-                    }MB`
-                );
+        // Perform rigorous file validation (size, MIME, extension, empty buffer, path traversal)
+        const validation = validateUploadFile(file);
+        if (!validation.valid) {
+            return res.status(400).json({
+                success: false,
+                error: validation.error,
+            });
         }
 
-        // Check current file count
+        // Check current file count limit
         const { data: existingFiles, error: listError } = await supabase.storage
             .from("Files-upload")
             .list(userId);
 
         if (listError) {
             console.error("Error checking file count:", listError);
-            return res.status(500).send("Error checking file count");
+            return res.status(500).json({
+                success: false,
+                error: "Error verifying storage quota. Please try again.",
+            });
         }
 
         const actualFileCount = existingFiles.filter(
@@ -187,12 +201,28 @@ router.post("/upload-file", authMiddleware, async (req, res) => {
         ).length;
 
         if (actualFileCount >= MAX_FILES_PER_USER) {
-            return res
-                .status(400)
-                .send(`Maximum file limit of ${MAX_FILES_PER_USER} reached`);
+            return res.status(400).json({
+                success: false,
+                error: `Maximum file limit of ${MAX_FILES_PER_USER} reached. Please delete an older file to upload a new one.`,
+            });
         }
 
-        const fileName = `${Date.now()}-${file.name}`;
+        // Prevent duplicate processing if file with same name and size exists for user
+        const existingDoc = await File.findOne({
+            userId,
+            originalName: validation.sanitizedName,
+            size: file.size,
+        });
+
+        if (existingDoc) {
+            return res.status(409).json({
+                success: false,
+                error: `Duplicate file detected: '${validation.sanitizedName}' (${(file.size / 1024).toFixed(1)} KB) has already been uploaded.`,
+                file: existingDoc,
+            });
+        }
+
+        const fileName = `${Date.now()}-${validation.sanitizedName}`;
         const filePath = `${userId}/${fileName}`; // Store in user-specific folder
 
         // Upload to Supabase storage
@@ -205,19 +235,25 @@ router.post("/upload-file", authMiddleware, async (req, res) => {
 
         if (error) {
             console.error("Supabase upload error:", error);
-            return res.status(500).send("Error uploading file");
+            return res.status(500).json({
+                success: false,
+                error: "Cloud storage upload failed. Please try again.",
+            });
         }
 
-        // Create MongoDB document with initial metadata
+        // Create MongoDB document with initial metadata & RAG tracking fields
         const fileDoc = await File.create({
             userId,
             fileName,
-            originalName: file.name,
+            originalName: validation.sanitizedName,
             supabasePath: filePath,
             mimetype: file.mimetype,
             size: file.size,
+            chunkCount: 0,
             processingStatus: {
                 textExtracted: false,
+                chunked: false,
+                indexed: false,
                 tagged: false,
                 summarized: false,
                 error: null,
@@ -231,14 +267,18 @@ router.post("/upload-file", authMiddleware, async (req, res) => {
             console.error("Background processing failed:", err);
         });
 
-        res.json({
+        res.status(201).json({
             success: true,
-            message: "File uploaded successfully",
+            message: "File uploaded successfully and queued for processing",
             file: fileDoc,
+            isDocument: validation.isDocument,
         });
     } catch (error) {
         console.error("Upload error:", error);
-        res.status(500).send("Server error");
+        res.status(500).json({
+            success: false,
+            error: "An unexpected server error occurred during upload.",
+        });
     }
 });
 
@@ -298,9 +338,16 @@ router.post("/delete-file", authMiddleware, async (req, res) => {
         console.log("=== DELETE SUCCESS ===");
         console.log("Delete response data:", data);
 
-        // Delete MongoDB document
-        await File.deleteOne({ userId, fileName });
-        console.log("MongoDB document deleted");
+        // Delete associated MongoDB document and indexed chunks
+        const fileDoc = await File.findOne({ userId, fileName });
+        if (fileDoc) {
+            const deleteChunksResult = await DocumentChunk.deleteMany({ fileId: fileDoc._id, userId });
+            console.log(`Cleaned up ${deleteChunksResult.deletedCount} indexed chunks for ${fileName}`);
+            await File.deleteOne({ _id: fileDoc._id });
+            console.log("MongoDB document deleted");
+        } else {
+            await File.deleteOne({ userId, fileName });
+        }
 
         // Verify deletion
         const { data: afterDelete, error: verifyError } = await supabase.storage
@@ -520,24 +567,55 @@ router.get(["/file-status/:fileId", "/api/file-status/:fileId"], authMiddleware,
         const { fileId } = req.params;
         const userId = req.user.userId;
 
-        const file = await File.findOne({ _id: fileId, userId }).lean();
+        const mongoose = require("mongoose");
+        let query = { userId };
+        if (mongoose.Types.ObjectId.isValid(fileId)) {
+            query._id = fileId;
+        } else {
+            query.fileName = fileId;
+        }
+
+        const file = await File.findOne(query).lean();
 
         if (!file) {
-            return res.status(404).json({ error: "File not found" });
+            return res.status(404).json({ success: false, error: "File not found" });
         }
 
         res.json({
+            success: true,
             _id: file._id,
             fileName: file.fileName,
-            processingStatus: file.processingStatus,
-            tags: file.tags,
-            category: file.category,
-            summary: file.summary,
+            originalName: file.originalName || file.fileName,
+            mimetype: file.mimetype,
+            size: file.size,
+            chunkCount: file.chunkCount || 0,
+            processingStatus: file.processingStatus || {
+                textExtracted: false,
+                chunked: false,
+                indexed: false,
+                tagged: false,
+                summarized: false,
+                error: null,
+            },
+            tags: file.tags || [],
+            category: file.category || "Other",
+            summary: file.summary || null,
+            updatedAt: file.updatedAt,
         });
     } catch (error) {
         console.error("File status error:", error);
-        res.status(500).json({ error: "Failed to fetch file status" });
+        res.status(500).json({ success: false, error: "Failed to fetch file status" });
     }
+});
+
+// Supported formats and upload constraints endpoint
+router.get(["/supported-formats", "/api/supported-formats"], (req, res) => {
+    res.json({
+        success: true,
+        supportedDocumentExtensions: SUPPORTED_DOCUMENT_EXTENSIONS,
+        maxFileSizeMB: MAX_FILE_SIZE / (1024 * 1024),
+        maxFilesPerUser: MAX_FILES_PER_USER,
+    });
 });
 
 module.exports = router;

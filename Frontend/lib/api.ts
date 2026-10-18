@@ -97,11 +97,26 @@ class ApiClient {
     const formData = new FormData();
     formData.append('file', file);
 
-    return fetch(`${this.baseURL}/files/upload-file`, {
+    const response = await fetch(`${this.baseURL}/files/upload-file`, {
       method: 'POST',
       body: formData,
       credentials: 'include',
-    }).then(res => res.json());
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `Upload failed with status ${response.status}`);
+    }
+    return data;
+  }
+
+  async getSupportedFormats() {
+    return this.request<{
+      success: boolean;
+      supportedDocumentExtensions: string[];
+      maxFileSizeMB: number;
+      maxFilesPerUser: number;
+    }>('/files/supported-formats');
   }
 
   async deleteFile(fileName: string) {

@@ -45,6 +45,7 @@ export default function Dashboard() {
   const [copiedFileName, setCopiedFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [processingFiles, setProcessingFiles] = useState<Set<string>>(new Set());
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -165,15 +166,40 @@ export default function Dashboard() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Client-side pre-validation
+    if (file.size === 0) {
+      setError('Cannot upload empty file (0 bytes). Please select a file with content.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError(`File size (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds the 5MB limit. Please upload a smaller document.`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    const dangerous = ['.exe', '.bat', '.cmd', '.sh', '.php', '.js', '.vbs'];
+    const lowerName = file.name.toLowerCase();
+    if (dangerous.some((ext) => lowerName.endsWith(ext))) {
+      setError(`File type not allowed for security reasons.`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     setUploading(true);
+    setUploadStatus(`Uploading "${file.name}" (${(file.size / 1024).toFixed(1)} KB)...`);
     setError('');
 
     try {
       await apiClient.uploadFile(file);
+      setUploadStatus(`File uploaded! Processing AI analysis and indexing...`);
       await fetchFiles();
       if (fileInputRef.current) fileInputRef.current.value = '';
+      setTimeout(() => setUploadStatus(null), 4000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
+      setUploadStatus(null);
     } finally {
       setUploading(false);
     }
@@ -309,8 +335,18 @@ export default function Dashboard() {
           </div>
         )}
 
+        {uploadStatus && (
+          <div className="mb-6 p-4 bg-primary/10 border border-primary/30 rounded-xl text-primary text-sm flex items-center justify-between animate-fadeIn shadow-sm">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-primary animate-ping" />
+              <span className="font-medium">{uploadStatus}</span>
+            </div>
+            <button onClick={() => setUploadStatus(null)} className="text-xs font-bold hover:underline opacity-80">Dismiss</button>
+          </div>
+        )}
+
         {/* Search & Upload Bar */}
-        <div className="mb-6 flex flex-col sm:flex-row gap-4">
+        <div className="mb-3 flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
             <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
@@ -342,6 +378,15 @@ export default function Dashboard() {
               disabled={uploading}
             />
           </label>
+        </div>
+
+        {/* Document upload format guidance banner */}
+        <div className="mb-6 flex items-center justify-between text-xs text-muted-foreground px-1">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <span>Supported for Ask VaultMind: <strong>PDF, DOCX, TXT, MD, CSV</strong> (max 5MB)</span>
+          </span>
+          <span className="hidden sm:inline">Automatic AI Tagging & Semantic Chunking</span>
         </div>
 
         {/* DaisyUI Filter Controls Dropdowns with Radix UI Icons */}

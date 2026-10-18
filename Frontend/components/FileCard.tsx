@@ -159,13 +159,20 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
               )}
             </div>
 
-            {/* File Name */}
-            <h3
-              className="text-xl font-bold tracking-tight text-white drop-shadow-md truncate mb-2 group-hover:text-white transition-colors"
-              title={file.name}
-            >
-              {file.name}
-            </h3>
+            {/* File Name & Document Status Badge */}
+            <div className="flex items-center gap-2 mb-2">
+              <h3
+                className="text-xl font-bold tracking-tight text-white drop-shadow-md truncate group-hover:text-white transition-colors flex-1"
+                title={file.originalName || file.name}
+              >
+                {file.originalName || file.name}
+              </h3>
+              {isDocument && (
+                <span className="text-[10px] bg-blue-500/25 border border-blue-400/40 text-blue-200 px-2 py-0.5 rounded-full font-semibold flex-shrink-0">
+                  {file.chunkCount ? `${file.chunkCount} chunks` : 'Document'}
+                </span>
+              )}
+            </div>
 
             {/* Tags */}
             {file.tags && file.tags.length > 0 && (
