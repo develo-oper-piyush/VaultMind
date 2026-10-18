@@ -502,3 +502,52 @@ While a file resides in the Recycle Bin:
 > - Exactly **one** commit per calendar day.
 > - No simulated progress, backdating, or multi-commit batches on a single calendar day.
 > - Today (Day 1: 2026-10-16) contains strictly the Day 1 documentation and branch setup.
+
+---
+
+## H. Implementation Progress Log
+
+### Day 1 — 2026-10-16
+- **Status**: Completed
+- **Commit**: `7bfa97f` (`docs: document file version history and recycle bin design`)
+- **Key Accomplishments**:
+  - Initialized dedicated feature branch `feature/file-version-history-recycle-bin`.
+  - Conducted full architectural audit of backend, frontend, Supabase storage, and MongoDB models.
+  - Created comprehensive technical architecture specification and seven-day roadmap in `docs/file-version-history-recycle-bin-plan.md`.
+  - Pushed to remote origin.
+
+### Day 2 — 2026-10-18
+- **Status**: Completed (Models, Foundation & Tests)
+- **Models, Schemas, Migrations & Services Added**:
+  - `Backend/models/file.model.js`: Extended with versioning fields (`currentVersion`, `totalVersions`) and soft-delete fields (`isDeleted`, `deletedAt`, `deletionExpiresAt`, `deletedBy`, `originalFolder`), compound indexes (`{ userId: 1, isDeleted: 1, createdAt: -1 }`, `{ userId: 1, isDeleted: 1, deletionExpiresAt: 1 }`), and `.active()` / `.deleted()` query helpers.
+  - `Backend/models/fileVersion.model.js`: Created schema for immutable file revision snapshots with compound unique index `{ fileId: 1, versionNumber: 1 }` and chronological query indexes.
+  - `Backend/utils/fileValidation.js`: Security and validation utilities for ObjectId validation, anti-path-traversal filename sanitization, storage path boundary checks, and ownership assertions.
+  - `Backend/services/version.service.js`: Foundational version history operations: SHA-256 content hashing (`computeContentHash`), secure storage path generation (`generateVersionStoragePath`), next version determination (`getNextVersionNumber`), version creation helper (`createFileVersionRecord`), and lazy initial version backfill (`ensureInitialVersion`).
+  - `Backend/services/recycleBin.service.js`: Foundational Recycle Bin operations: 30-day retention calculation (`calculateRetentionExpiry`), soft deletion state transitions (`softDeleteFile`), restoration collision resolution (`resolveRestoreName`), and active quota queries (`countActiveUserFiles`).
+  - `Backend/migrations/001_add_versioning_and_recycle_bin.js`: Idempotent migration script ensuring index creation and backfilling default values for legacy records.
+  - `Backend/tests/`: Comprehensive unit tests for models, validation, services, and migrations.
+- **Files Modified / Added**:
+  - `Backend/models/file.model.js`
+  - `Backend/models/fileVersion.model.js`
+  - `Backend/services/version.service.js`
+  - `Backend/services/recycleBin.service.js`
+  - `Backend/utils/fileValidation.js`
+  - `Backend/migrations/001_add_versioning_and_recycle_bin.js`
+  - `Backend/tests/fileValidation.test.js`
+  - `Backend/tests/models.test.js`
+  - `Backend/tests/version.service.test.js`
+  - `Backend/tests/recycleBin.service.test.js`
+  - `Backend/tests/migration.test.js`
+  - `Backend/package.json`
+  - `docs/file-version-history-recycle-bin-plan.md`
+- **Tests Executed & Real Results**:
+  - Command: `npm test` (`node --test tests/**/*.test.js`)
+  - Results: 35 passing tests across 15 suites (0 failures, 0 skipped, duration 1.28s).
+- **Unresolved Issues**:
+  - None. All data models, indexes, and foundational services are verified and operational.
+- **Day 3 Planned Tasks**:
+  - Implement File Version History Express routes and endpoints (`POST /files/:fileId/version`, `GET /files/:fileId/versions`, `GET /files/:fileId/versions/:versionId/download`, `POST /files/:fileId/versions/:versionId/restore`).
+  - Connect version upload to Supabase Storage and trigger background AI reprocessing on version updates.
+  - Implement non-destructive version restoration creating a new version from historical binary.
+  - Add integration tests for version endpoints and storage flows.
+
