@@ -4,9 +4,12 @@ const authMiddleware = require("../middlewares/auth.middleware");
 const File = require("../models/file.model");
 const DocumentChunk = require("../models/documentChunk.model");
 const {
+    extractDocument,
     extractTextFromBuffer,
     extractKeywords,
 } = require("../utils/textExtractor");
+const { chunkDocument } = require("../utils/chunkingEngine");
+const ragConfig = require("../config/ragConfig");
 const { generateTagsAndCategory } = require("../utils/aiTagger");
 const { generateSummary } = require("../utils/aiSummarizer");
 const { searchFiles } = require("../utils/searchEngine");
@@ -113,45 +116,90 @@ router.get("/home", authMiddleware, async (req, res) => {
     }
 });
 
-// Background AI processing function
+// Background document processing: Text Extraction, Chunking & AI Analysis
 const processFileInBackground = async (fileDoc, fileBuffer) => {
     try {
         console.log(`Starting background processing for file: ${fileDoc.fileName}`);
 
-        // Extract text content
-        const textContent = await extractTextFromBuffer(
+        // 1. Extract clean text and per-page metadata
+        const extraction = await extractDocument(
             fileBuffer,
-            fileDoc.mimetype
+            fileDoc.mimetype,
+            fileDoc.originalName
         );
+
+        if (!extraction.success || !extraction.text) {
+            console.warn(`Text extraction note for ${fileDoc.fileName}:`, extraction.error);
+            await File.findByIdAndUpdate(fileDoc._id, {
+                "processingStatus.textExtracted": false,
+                "processingStatus.chunked": false,
+                "processingStatus.indexed": false,
+                "processingStatus.error": extraction.error || "No readable text content found.",
+                updatedAt: Date.now(),
+            });
+            return;
+        }
+
+        const textContent = extraction.text;
         const keywords = extractKeywords(textContent);
 
+        // 2. Generate sliding-window overlapping chunks with page metadata
+        const chunks = chunkDocument(extraction, {
+            chunkSize: ragConfig.CHUNK_SIZE,
+            chunkOverlap: ragConfig.CHUNK_OVERLAP,
+        });
+
+        // 3. Persist document chunks to MongoDB (idempotent: purge previous chunks if any)
+        await DocumentChunk.deleteMany({ fileId: fileDoc._id });
+
+        if (chunks.length > 0) {
+            const chunkDocs = chunks.map((c) => ({
+                userId: fileDoc.userId,
+                fileId: fileDoc._id,
+                fileName: fileDoc.fileName,
+                originalName: fileDoc.originalName,
+                chunkIndex: c.chunkIndex,
+                text: c.text,
+                pageNumber: c.pageNumber,
+                charStart: c.charStart,
+                charEnd: c.charEnd,
+                keywords: c.keywords,
+                metadata: c.metadata,
+            }));
+            await DocumentChunk.insertMany(chunkDocs);
+        }
+
+        console.log(`Extracted and indexed ${chunks.length} chunks for: ${fileDoc.fileName}`);
+
+        // Update File with extraction & chunking progress
         await File.findByIdAndUpdate(fileDoc._id, {
             textContent,
             keywords,
+            chunkCount: chunks.length,
             "processingStatus.textExtracted": true,
+            "processingStatus.chunked": true,
             updatedAt: Date.now(),
         });
 
-        console.log(`Text extracted for file: ${fileDoc.fileName}`);
-
-        // Run AI tagging and summarization in parallel
+        // 4. Run AI tagging and summarization in parallel
         const [taggingResult, summary] = await Promise.all([
             generateTagsAndCategory(fileDoc.originalName, fileDoc.mimetype, textContent),
             generateSummary(textContent),
         ]);
 
-        // Update with AI results
+        // 5. Update with final AI results & mark as indexed
         await File.findByIdAndUpdate(fileDoc._id, {
             tags: taggingResult.tags || [],
             category: taggingResult.category || "Other",
             summary: summary,
             "processingStatus.tagged": true,
             "processingStatus.summarized": true,
+            "processingStatus.indexed": true,
             "processingStatus.error": taggingResult.error || null,
             updatedAt: Date.now(),
         });
 
-        console.log(`AI processing completed for file: ${fileDoc.fileName}`);
+        console.log(`Full document processing & indexing completed for: ${fileDoc.fileName}`);
     } catch (error) {
         console.error(`Background processing error for ${fileDoc.fileName}:`, error);
         await File.findByIdAndUpdate(fileDoc._id, {
@@ -616,6 +664,34 @@ router.get(["/supported-formats", "/api/supported-formats"], (req, res) => {
         maxFileSizeMB: MAX_FILE_SIZE / (1024 * 1024),
         maxFilesPerUser: MAX_FILES_PER_USER,
     });
+});
+
+// Chunks route for inspecting indexed document chunks
+router.get(["/chunks/:fileId", "/api/files/chunks/:fileId"], authMiddleware, async (req, res) => {
+    try {
+        const { fileId } = req.params;
+        const userId = req.user.userId;
+
+        const mongoose = require("mongoose");
+        let query = { userId };
+        if (mongoose.Types.ObjectId.isValid(fileId)) {
+            query.fileId = fileId;
+        } else {
+            query.fileName = fileId;
+        }
+
+        const chunks = await DocumentChunk.find(query).sort({ chunkIndex: 1 }).lean();
+
+        res.json({
+            success: true,
+            fileId,
+            totalChunks: chunks.length,
+            chunks,
+        });
+    } catch (error) {
+        console.error("Fetch chunks error:", error);
+        res.status(500).json({ success: false, error: "Failed to fetch document chunks" });
+    }
 });
 
 module.exports = router;
