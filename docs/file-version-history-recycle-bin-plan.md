@@ -545,9 +545,38 @@ While a file resides in the Recycle Bin:
   - Results: 35 passing tests across 15 suites (0 failures, 0 skipped, duration 1.28s).
 - **Unresolved Issues**:
   - None. All data models, indexes, and foundational services are verified and operational.
-- **Day 3 Planned Tasks**:
-  - Implement File Version History Express routes and endpoints (`POST /files/:fileId/version`, `GET /files/:fileId/versions`, `GET /files/:fileId/versions/:versionId/download`, `POST /files/:fileId/versions/:versionId/restore`).
-  - Connect version upload to Supabase Storage and trigger background AI reprocessing on version updates.
-  - Implement non-destructive version restoration creating a new version from historical binary.
-  - Add integration tests for version endpoints and storage flows.
+
+### Day 3 — 2026-10-20
+- **Status**: Completed (File Version History APIs & Storage Integration)
+- **Endpoints Implemented**:
+  - `POST /files/:fileId/version` (and `POST /files/:fileId/versions`, `POST /api/files/:fileId/version`): Authenticated upload of a new file revision, stores binary in Supabase under user-isolated path `{userId}/versions/{fileId}/...`, computes SHA-256 content hash, creates `FileVersion` record, atomically updates `File` metadata (`currentVersion`, `totalVersions`, size, mimetype), enforces optimistic concurrency, and triggers background AI text extraction/tagging/summarization.
+  - `GET /files/:fileId/versions` (and `GET /api/files/:fileId/versions`): Authenticated retrieval of all versions for a file sorted in descending version order (`{ versionNumber: -1 }`). Automatically backfills initial Version 1 for legacy files and projects public metadata omitting internal storage paths.
+  - `GET /files/:fileId/versions/:versionId/download` (and `GET /api/files/:fileId/versions/:versionId/download`): Authenticated binary download from Supabase Storage with storage boundary validation, returning proper `Content-Type`, `Content-Disposition`, and `Content-Length` headers.
+  - `POST /files/:fileId/versions/:versionId/restore` (and `POST /api/files/:fileId/versions/:versionId/restore`): Non-destructive version restoration. Fetches the historical binary from Supabase, creates a brand new sequential version ($N+1$) with the restored content, preserves all historical audit records unchanged, atomically updates `File` active metadata, and re-triggers background AI reprocessing.
+- **Files Modified / Added**:
+  - `Backend/services/version.service.js`: Added `uploadFileVersion`, `downloadHistoricalVersion`, and `restoreFileVersion` with concurrency safeguards and compensating rollback cleanup.
+  - `Backend/routes/index.routes.js`: Registered Day 3 version history routes with both `/files` and `/api/files` prefix compatibility; integrated initial `FileVersion` creation into `POST /files/upload-file`.
+  - `Backend/config/supabase.js`: Enhanced with safe fallback placeholder credentials for offline and testing environments.
+  - `Backend/app.js`: Exported `app` and wrapped `app.listen()` in `require.main === module` check for test compatibility.
+  - `Backend/tests/version.service.test.js`: Added 26 unit tests covering version numbering, storage paths, upload workflows, compensating rollbacks, concurrency conflicts (409), downloads, and restorations.
+  - `Backend/tests/versionRoutes.test.js`: Added 10 integration tests validating route authentication (401), parameter validation (400), prefix routing compatibility, and status codes.
+  - `docs/file-version-history-recycle-bin-plan.md`: Updated with Day 3 progress, architectural decisions, and test logs.
+- **Storage and Concurrency Decisions**:
+  - Version storage objects are stored namespaced at `{userId}/versions/{fileId}/v{versionNumber}_{timestamp}-{cleanFilename}`.
+  - Anti-path-traversal and user namespace boundary checks are enforced on all storage interactions via `validateStoragePath`.
+  - Concurrency is managed via optimistic locking: `File.findOneAndUpdate({ _id, userId, currentVersion: expectedVersion })`. If a conflict occurs, newly uploaded storage objects and version records are rolled back, and `409 Conflict` is returned.
+  - Historical downloads stream/send binaries safely without exposing Supabase service role keys or direct storage URLs.
+  - Non-destructive restoration creates a new version $N+1$ from the historical binary; historical version records are strictly immutable.
+- **Tests Executed & Real Results**:
+  - Command: `npm test` (`node --test tests/**/*.test.js`)
+  - Results: 71 passing tests across 26 suites (0 failures, 0 skipped, duration 6.9s).
+- **Known Limitations**:
+  - File deletion currently performs hard deletion; soft-delete transitions and Recycle Bin holding state are scheduled for Day 4.
+  - Frontend UI modals and dashboard version cards are scheduled for Day 5.
+- **Day 4 Planned Tasks**:
+  - Implement Recycle Bin soft-delete endpoints (`POST /files/:fileId/trash`, `POST /files/delete-file` soft-delete transition).
+  - Implement Recycle Bin listing (`GET /files/recycle-bin`) with retention countdown timers and version counts.
+  - Implement Recycle Bin restoration (`POST /files/recycle-bin/:fileId/restore`) with active quota enforcement and naming collision resolution (`(restored)` auto-suffix).
+  - Implement permanent purge (`DELETE /files/recycle-bin/:fileId` and bulk `empty`) with cascade deletion across Supabase Storage, `FileVersion`, `File`, and `DocumentChunk` records.
+
 

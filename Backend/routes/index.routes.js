@@ -9,6 +9,15 @@ const {
 const { generateTagsAndCategory } = require("../utils/aiTagger");
 const { generateSummary } = require("../utils/aiSummarizer");
 const { searchFiles } = require("../utils/searchEngine");
+const {
+    computeContentHash,
+    createFileVersionRecord,
+    uploadFileVersion,
+    listVersionsForFile,
+    downloadHistoricalVersion,
+    restoreFileVersion,
+} = require("../services/version.service");
+const { isValidObjectId } = require("../utils/fileValidation");
 
 const router = express.Router();
 
@@ -223,6 +232,25 @@ router.post("/upload-file", authMiddleware, async (req, res) => {
                 error: null,
             },
         });
+
+        // Create initial FileVersion record for version history
+        try {
+            const hash = computeContentHash(file.data);
+            await createFileVersionRecord({
+                fileId: fileDoc._id,
+                userId,
+                versionNumber: 1,
+                originalName: file.name,
+                storagePath: filePath,
+                mimetype: file.mimetype,
+                size: file.size,
+                contentHash: hash,
+                changeSummary: "Initial version",
+                createdBy: userId,
+            });
+        } catch (versionErr) {
+            console.error("Failed to create initial version record:", versionErr);
+        }
 
         console.log("File uploaded successfully:", data);
 
@@ -539,5 +567,199 @@ router.get(["/file-status/:fileId", "/api/file-status/:fileId"], authMiddleware,
         res.status(500).json({ error: "Failed to fetch file status" });
     }
 });
+
+// ==========================================
+// File Version History Endpoints (Day 3)
+// ==========================================
+
+// 1. Upload a new file version
+router.post(["/:fileId/version", "/:fileId/versions"], authMiddleware, async (req, res) => {
+    try {
+        const { fileId } = req.params;
+        const userId = req.user.userId;
+
+        if (!req.files || !req.files.file) {
+            return res.status(400).json({
+                success: false,
+                error: "No file uploaded",
+            });
+        }
+
+        const uploadedFile = req.files.file;
+        const changeSummary = req.body?.changeSummary || req.body?.comment || "Updated file content";
+
+        const result = await uploadFileVersion({
+            fileId,
+            userId,
+            file: uploadedFile,
+            changeSummary,
+        });
+
+        // Trigger background AI processing asynchronously (fire-and-forget)
+        processFileInBackground(result.file, uploadedFile.data).catch((err) => {
+            console.error(`Background AI processing error for new version of ${result.file.fileName}:`, err);
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: "File version uploaded successfully",
+            version: {
+                _id: result.version._id,
+                fileId: result.version.fileId,
+                versionNumber: result.version.versionNumber,
+                originalName: result.version.originalName,
+                size: result.version.size,
+                mimetype: result.version.mimetype,
+                contentHash: result.version.contentHash,
+                changeSummary: result.version.changeSummary,
+                createdAt: result.version.createdAt,
+            },
+            file: {
+                _id: result.file._id,
+                currentVersion: result.file.currentVersion,
+                totalVersions: result.file.totalVersions,
+                originalName: result.file.originalName,
+                size: result.file.size,
+                mimetype: result.file.mimetype,
+                updatedAt: result.file.updatedAt,
+            },
+        });
+    } catch (error) {
+        console.error("Upload version error:", error);
+        return res.status(error.status || 500).json({
+            success: false,
+            error: error.message || "Failed to upload file version",
+        });
+    }
+});
+
+// 2. List all versions for a file
+router.get(["/:fileId/versions", "/:fileId/version"], authMiddleware, async (req, res) => {
+    try {
+        const { fileId } = req.params;
+        const userId = req.user.userId;
+
+        const { file, versions } = await listVersionsForFile(fileId, userId);
+
+        return res.json({
+            success: true,
+            fileId: file._id,
+            currentVersion: file.currentVersion || 1,
+            totalVersions: file.totalVersions || versions.length || 1,
+            count: versions.length,
+            versions: versions.map((v) => ({
+                _id: v._id,
+                fileId: v.fileId,
+                versionNumber: v.versionNumber,
+                originalName: v.originalName,
+                size: v.size,
+                mimetype: v.mimetype,
+                contentHash: v.contentHash,
+                changeSummary: v.changeSummary,
+                summarySnapshot: v.summarySnapshot,
+                tagsSnapshot: v.tagsSnapshot,
+                createdBy: v.createdBy,
+                createdAt: v.createdAt,
+            })),
+        });
+    } catch (error) {
+        console.error("List versions error:", error);
+        return res.status(error.status || 500).json({
+            success: false,
+            error: error.message || "Failed to list file versions",
+        });
+    }
+});
+
+// 3. Download a historical version
+router.get(
+    ["/:fileId/versions/:versionId/download", "/:fileId/version/:versionId/download"],
+    authMiddleware,
+    async (req, res) => {
+        try {
+            const { fileId, versionId } = req.params;
+            const userId = req.user.userId;
+
+            const { version, buffer, contentType, filename, size } =
+                await downloadHistoricalVersion(fileId, versionId, userId);
+
+            res.setHeader("Content-Type", contentType);
+            const encodedFilename = encodeURIComponent(filename).replace(/['()]/g, escape);
+            res.setHeader(
+                "Content-Disposition",
+                `attachment; filename="${filename.replace(/"/g, '\\"')}"; filename*=UTF-8''${encodedFilename}`
+            );
+            if (size !== undefined && size !== null) {
+                res.setHeader("Content-Length", size);
+            }
+
+            return res.send(buffer);
+        } catch (error) {
+            console.error("Download version error:", error);
+            return res.status(error.status || 500).json({
+                success: false,
+                error: error.message || "Failed to download historical version",
+            });
+        }
+    }
+);
+
+// 4. Restore a historical version
+router.post(
+    ["/:fileId/versions/:versionId/restore", "/:fileId/version/:versionId/restore"],
+    authMiddleware,
+    async (req, res) => {
+        try {
+            const { fileId, versionId } = req.params;
+            const userId = req.user.userId;
+            const changeSummary = req.body?.changeSummary;
+
+            const result = await restoreFileVersion({
+                fileId,
+                versionId,
+                userId,
+                changeSummary,
+            });
+
+            // Trigger background AI processing for restored content
+            if (result.buffer) {
+                processFileInBackground(result.file, result.buffer).catch((err) => {
+                    console.error(`Background AI processing error for restored version of ${result.file.fileName}:`, err);
+                });
+            }
+
+            return res.json({
+                success: true,
+                message: `Successfully restored version as version ${result.version.versionNumber}`,
+                version: {
+                    _id: result.version._id,
+                    fileId: result.version.fileId,
+                    versionNumber: result.version.versionNumber,
+                    originalName: result.version.originalName,
+                    size: result.version.size,
+                    mimetype: result.version.mimetype,
+                    contentHash: result.version.contentHash,
+                    changeSummary: result.version.changeSummary,
+                    createdAt: result.version.createdAt,
+                },
+                file: {
+                    _id: result.file._id,
+                    currentVersion: result.file.currentVersion,
+                    totalVersions: result.file.totalVersions,
+                    originalName: result.file.originalName,
+                    size: result.file.size,
+                    mimetype: result.file.mimetype,
+                    updatedAt: result.file.updatedAt,
+                },
+            });
+        } catch (error) {
+            console.error("Restore version error:", error);
+            return res.status(error.status || 500).json({
+                success: false,
+                error: error.message || "Failed to restore file version",
+            });
+        }
+    }
+);
 
 module.exports = router;

@@ -76,6 +76,10 @@ app.use((err, req, res, next) => {
     });
 });
 
-app.listen(process.env.PORT || 3000, () => {
-    console.log("Server is running");
-});
+if (require.main === module) {
+    app.listen(process.env.PORT || 3000, () => {
+        console.log("Server is running");
+    });
+}
+
+module.exports = app;
