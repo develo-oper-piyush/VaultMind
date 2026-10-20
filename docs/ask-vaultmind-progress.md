@@ -9,8 +9,8 @@
 | **Day 1** | 2026-10-15 | `90a9e53` | `feat(vaultmind): establish document chat foundation` | Completed & Pushed | Repo inspection, architecture doc, models, RAG config, TypeScript types |
 | **Day 2** | 2026-10-18 | `21ea353` | `feat(vaultmind): add secure document upload` | Completed & Pushed | File validation, 0-byte & 5MB checks, duplicate prevention, chunk cleanup on deletion |
 | **Day 3** | 2026-10-19 | `98a299c` | `feat(vaultmind): implement document extraction and chunking` | Completed & Pushed | Enhanced extraction (PDF, DOCX, TXT), text normalization, sliding-window chunking, page tagging |
-| **Day 4** | 2026-10-20 | Pending | `feat(vaultmind): add document indexing and retrieval` | In Progress | TF-IDF chunk retrieval engine, cosine similarity, keyword/filename boosting, document filtering |
-| **Day 5** | Scheduled | - | `feat(vaultmind): add grounded document question answering` | Scheduled | Grounded RAG with Gemini, context fencing, citation builder |
+| **Day 4** | 2026-10-20 | `2cb3eda` | `feat(vaultmind): add document indexing and retrieval` | Completed & Pushed | TF-IDF chunk retrieval engine, cosine similarity, keyword/filename boosting, document filtering |
+| **Day 5** | 2026-10-21 | Pending | `feat(vaultmind): add grounded document question answering` | In Progress | Grounded RAG with Gemini, context fencing, citation builder, honest fallback handling |
 | **Day 6** | Scheduled | - | `feat(vaultmind): integrate chat interface and citations` | Scheduled | Ask VaultMind chat UI, evidence citations drawer, history persistence |
 | **Day 7** | Scheduled | - | `test(vaultmind): validate and document document chat workflow` | Scheduled | End-to-end testing, hardening, edge cases, docs finalization |
 
@@ -45,3 +45,13 @@
   - Document-level filtering (scopes retrieval to permitted `fileFilters`)
   - Empty / whitespace query safety handling
   - Endpoints: `POST /files/retrieve` for standalone retrieval testing
+
+### Day 5 Validation Details
+- **Test Suite**: `Backend/tests/askDocumentService.test.js` (8/8 unit tests passing)
+- **Covered Scenarios**:
+  - Question validation: accepts natural questions, rejects empty, whitespace, or oversized questions
+  - Untrusted context containment: wraps chunks in `<<<DOCUMENT_CONTEXT>>> ... <<<END_DOCUMENT_CONTEXT>>>` fences
+  - Prompt construction with anti-jailbreak grounding instructions
+  - Source citations generation: maps retrieved chunks to document name, page number, chunk index, similarity score, and excerpt snippet
+  - Non-hallucination guarantee: returns empty citations and honest message on insufficient context
+  - Endpoints: `POST /chat/ask`, `GET /chat/history`, `POST /chat/clear`, `GET /chat/conversations`

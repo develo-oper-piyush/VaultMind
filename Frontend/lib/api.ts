@@ -208,6 +208,18 @@ class ApiClient {
       body: JSON.stringify(payload),
     });
   }
+
+  async getConversations() {
+    return this.request<{
+      success: boolean;
+      conversations: Array<{
+        conversationId: string;
+        lastMessage: string;
+        updatedAt: string;
+        messageCount: number;
+      }>;
+    }>('/chat/conversations');
+  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);
