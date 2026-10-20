@@ -8,8 +8,8 @@
 |:---:|:---:|:---:|:---|:---:|:---|
 | **Day 1** | 2026-10-15 | `90a9e53` | `feat(vaultmind): establish document chat foundation` | Completed & Pushed | Repo inspection, architecture doc, models, RAG config, TypeScript types |
 | **Day 2** | 2026-10-18 | `21ea353` | `feat(vaultmind): add secure document upload` | Completed & Pushed | File validation, 0-byte & 5MB checks, duplicate prevention, chunk cleanup on deletion |
-| **Day 3** | 2026-10-19 | Pending | `feat(vaultmind): implement document extraction and chunking` | In Progress | Enhanced extraction (PDF, DOCX, TXT), text normalization, sliding-window chunking, page tagging |
-| **Day 4** | Scheduled | - | `feat(vaultmind): add document indexing and retrieval` | Scheduled | TF-IDF chunk retrieval, document filtering, similarity scoring |
+| **Day 3** | 2026-10-19 | `98a299c` | `feat(vaultmind): implement document extraction and chunking` | Completed & Pushed | Enhanced extraction (PDF, DOCX, TXT), text normalization, sliding-window chunking, page tagging |
+| **Day 4** | 2026-10-20 | Pending | `feat(vaultmind): add document indexing and retrieval` | In Progress | TF-IDF chunk retrieval engine, cosine similarity, keyword/filename boosting, document filtering |
 | **Day 5** | Scheduled | - | `feat(vaultmind): add grounded document question answering` | Scheduled | Grounded RAG with Gemini, context fencing, citation builder |
 | **Day 6** | Scheduled | - | `feat(vaultmind): integrate chat interface and citations` | Scheduled | Ask VaultMind chat UI, evidence citations drawer, history persistence |
 | **Day 7** | Scheduled | - | `test(vaultmind): validate and document document chat workflow` | Scheduled | End-to-end testing, hardening, edge cases, docs finalization |
@@ -31,3 +31,17 @@
   - Page number preservation: each chunk tagged with originating `pageNumber` from multi-page documents
   - Keyword extraction per chunk for indexing
   - Endpoints: `GET /files/chunks/:fileId` for chunk inspection and verification
+
+### Day 4 Validation Details
+- **Test Suite**: `Backend/tests/retrievalEngine.test.js` (9/9 unit tests passing)
+- **Covered Scenarios**:
+  - Tokenization with stop-word stripping
+  - Vector cosine similarity computation
+  - Relevance ranking: prioritizes highest semantically matching chunks
+  - Exact phrase boosting (+0.35)
+  - Keyword match boosting (+0.12) and filename boosting (+0.15)
+  - Minimum score thresholding (filters out chunks below `minScore`)
+  - Top-K capping (strictly respects `topK` parameter)
+  - Document-level filtering (scopes retrieval to permitted `fileFilters`)
+  - Empty / whitespace query safety handling
+  - Endpoints: `POST /files/retrieve` for standalone retrieval testing

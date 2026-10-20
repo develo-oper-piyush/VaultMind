@@ -18,6 +18,7 @@ const {
     MAX_FILE_SIZE,
     SUPPORTED_DOCUMENT_EXTENSIONS,
 } = require("../utils/fileValidator");
+const { retrieveRelevantChunks } = require("../utils/retrievalEngine");
 
 const router = express.Router();
 
@@ -691,6 +692,41 @@ router.get(["/chunks/:fileId", "/api/files/chunks/:fileId"], authMiddleware, asy
     } catch (error) {
         console.error("Fetch chunks error:", error);
         res.status(500).json({ success: false, error: "Failed to fetch document chunks" });
+    }
+});
+
+// Retrieve relevant document chunks endpoint (RAG Phase 1 / Semantic search)
+router.post(["/retrieve", "/api/files/retrieve", "/api/chat/retrieve"], authMiddleware, async (req, res) => {
+    try {
+        const { query, fileFilters, topK, minScore } = req.body;
+        const userId = req.user.userId;
+
+        if (!query || query.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: "Search query is required.",
+            });
+        }
+
+        const retrievalResult = await retrieveRelevantChunks(userId, query.trim(), {
+            fileFilters: Array.isArray(fileFilters) ? fileFilters : undefined,
+            topK: topK ? parseInt(topK, 10) : undefined,
+            minScore: minScore !== undefined ? parseFloat(minScore) : undefined,
+        });
+
+        res.json({
+            success: true,
+            query: retrievalResult.query,
+            totalFound: retrievalResult.totalFound,
+            sufficientContext: retrievalResult.sufficientContext,
+            chunks: retrievalResult.chunks,
+        });
+    } catch (error) {
+        console.error("Retrieval endpoint error:", error);
+        res.status(500).json({
+            success: false,
+            error: "Failed to retrieve relevant document chunks.",
+        });
     }
 });
 

@@ -190,6 +190,24 @@ class ApiClient {
       totalChunks: number;
     }>(`/files/chunks/${fileId}`);
   }
+
+  async retrieveChunks(payload: {
+    query: string;
+    fileFilters?: string[];
+    topK?: number;
+    minScore?: number;
+  }) {
+    return this.request<{
+      success: boolean;
+      query: string;
+      totalFound: number;
+      sufficientContext: boolean;
+      chunks: any[];
+    }>('/files/retrieve', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);
