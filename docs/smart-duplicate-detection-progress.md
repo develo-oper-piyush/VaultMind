@@ -22,7 +22,7 @@ This document tracks the incremental, 7-day milestone-based implementation of **
 | Day | Milestone Target | Expected Commit Message | Target Date | Actual Date | Commit Hash | Push Status | Status |
 |:---:|---|---|:---:|:---:|:---:|:---:|:---:|
 | **Day 1** | Inspect repository, document architecture, define duplicate-matching rules, and establish test cases | `docs: define smart duplicate detection requirements` | 2026-10-15 | 2026-10-15 | `887f2fd` | Pending push | ✅ Completed |
-| **Day 2** | Implement normalization utilities and core duplicate-matching algorithm with unit tests | `feat: add duplicate matching engine` | 2026-10-16 | — | — | — | ⏳ Scheduled |
+| **Day 2** | Implement normalization utilities and core duplicate-matching algorithm with unit tests | `feat: add duplicate matching engine` | 2026-10-16 | 2026-10-16 | `e706538` | Pending push | ✅ Completed |
 | **Day 3** | Integrate duplicate detection with backend service layer / data-access layer | `feat: integrate duplicate detection backend` | 2026-10-17 | — | — | — | ⏳ Scheduled |
 | **Day 4** | Implement duplicate-checking API and consistent response handling | `feat: add duplicate detection API` | 2026-10-18 | — | — | — | ⏳ Scheduled |
 | **Day 5** | Build frontend warning modal, match display, confidence badge, and review actions | `feat: add duplicate warning interface` | 2026-10-19 | — | — | — | ⏳ Scheduled |
@@ -43,10 +43,28 @@ This document tracks the incremental, 7-day milestone-based implementation of **
 - **Tests Executed**:
   - Validated Git working tree and branch status (`main`).
   - Verified no prior smart duplicate detection commits exist for today.
-- **Commit Hash**: *(Updated upon commit)*
-- **Push Status**: *(Updated upon push)*
+- **Commit Hash**: `9d31b85`
+- **Push Status**: Pushed to `origin/main`
 - **Outstanding Issues**: None.
 - **Next Milestone**: Milestone 2 (`feat: add duplicate matching engine`) on the next eligible calendar day.
+
+### Milestone 2: Normalization Utilities & Core Duplicate-Matching Algorithm (Day 2)
+- **Date**: 2026-10-16
+- **Work Performed**:
+  - Implemented [`Backend/utils/duplicateEngine.js`](../Backend/utils/duplicateEngine.js) containing full deterministic scoring pipeline:
+    - Normalization: basename, whitespace, separator cleaner, copy suffix stripper (`(1)`, ` - Copy`, `_copy`), extension alias canonicalization (`jpeg` -> `jpg`, `docx` -> `doc`, etc.).
+    - Metrics: Levenshtein distance, normalized ratio ($1 - \text{dist}/\max$), token-set Jaccard similarity, size delta scoring, and MIME/media-group type similarity.
+    - Composite confidence calculation with weights ($w_n=0.50, w_s=0.35, w_t=0.15$) and confidence tiers (`EXACT`, `HIGH`, `MODERATE`, `NONE`).
+    - Dynamic plain-English match rationale explanation generator.
+    - Candidate search and ranking function (`findDuplicates`) with exclusion filter and safe error handling.
+  - Authored comprehensive test suite [`Backend/tests/duplicateEngine.test.js`](../Backend/tests/duplicateEngine.test.js) covering 18 test assertions including test scenarios TC-01 through TC-12.
+- **Tests Executed**:
+  - `node Backend/tests/duplicateEngine.test.js` -> 18/18 unit tests passing.
+  - Regression check: all 5 test suites (`fileValidator`, `chunkingEngine`, `retrievalEngine`, `askDocumentService`, `duplicateEngine`) -> 54/54 tests passing.
+- **Commit Hash**: `e706538`
+- **Push Status**: Pending push
+- **Outstanding Issues**: None.
+- **Next Milestone**: Milestone 3 (`feat: integrate duplicate detection backend`) on the next calendar day.
 
 ---
 
