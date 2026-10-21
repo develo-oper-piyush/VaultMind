@@ -19,6 +19,7 @@ const {
     SUPPORTED_DOCUMENT_EXTENSIONS,
 } = require("../utils/fileValidator");
 const { retrieveRelevantChunks } = require("../utils/retrievalEngine");
+const { duplicateService } = require("../utils/duplicateService");
 
 const router = express.Router();
 
@@ -256,18 +257,27 @@ router.post("/upload-file", authMiddleware, async (req, res) => {
             });
         }
 
-        // Prevent duplicate processing if file with same name and size exists for user
-        const existingDoc = await File.findOne({
+        // Authoritative duplicate detection check against existing user files
+        const uploadCheck = await duplicateService.validateUpload(
             userId,
-            originalName: validation.sanitizedName,
-            size: file.size,
-        });
+            {
+                name: validation.sanitizedName,
+                originalName: validation.sanitizedName,
+                size: file.size,
+                mimetype: file.mimetype,
+            },
+            req.body?.allowDuplicate
+        );
 
-        if (existingDoc) {
-            return res.status(409).json({
+        if (!uploadCheck.allowed) {
+            return res.status(uploadCheck.statusCode || 409).json({
                 success: false,
-                error: `Duplicate file detected: '${validation.sanitizedName}' (${(file.size / 1024).toFixed(1)} KB) has already been uploaded.`,
-                file: existingDoc,
+                isDuplicate: true,
+                confidenceLevel: uploadCheck.confidenceLevel,
+                highestScore: uploadCheck.highestScore,
+                error: uploadCheck.error,
+                duplicates: uploadCheck.checkResult?.duplicates || [],
+                file: uploadCheck.checkResult?.duplicates?.[0] || null,
             });
         }
 

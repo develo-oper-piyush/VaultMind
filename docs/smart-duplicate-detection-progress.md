@@ -23,7 +23,7 @@ This document tracks the incremental, 7-day milestone-based implementation of **
 |:---:|---|---|:---:|:---:|:---:|:---:|:---:|
 | **Day 1** | Inspect repository, document architecture, define duplicate-matching rules, and establish test cases | `docs: define smart duplicate detection requirements` | 2026-10-15 | 2026-10-15 | `887f2fd` | Pending push | ✅ Completed |
 | **Day 2** | Implement normalization utilities and core duplicate-matching algorithm with unit tests | `feat: add duplicate matching engine` | 2026-10-16 | 2026-10-16 | `e706538` | Pending push | ✅ Completed |
-| **Day 3** | Integrate duplicate detection with backend service layer / data-access layer | `feat: integrate duplicate detection backend` | 2026-10-17 | — | — | — | ⏳ Scheduled |
+| **Day 3** | Integrate duplicate detection with backend service layer / data-access layer | `feat: integrate duplicate detection backend` | 2026-10-17 | 2026-10-17 | `0775cb3` | Pending push | ✅ Completed |
 | **Day 4** | Implement duplicate-checking API and consistent response handling | `feat: add duplicate detection API` | 2026-10-18 | — | — | — | ⏳ Scheduled |
 | **Day 5** | Build frontend warning modal, match display, confidence badge, and review actions | `feat: add duplicate warning interface` | 2026-10-19 | — | — | — | ⏳ Scheduled |
 | **Day 6** | Add edge-case handling, integration tests, regression tests, and performance optimizations | `test: harden smart duplicate detection` | 2026-10-20 | — | — | — | ⏳ Scheduled |
@@ -61,10 +61,29 @@ This document tracks the incremental, 7-day milestone-based implementation of **
 - **Tests Executed**:
   - `node Backend/tests/duplicateEngine.test.js` -> 18/18 unit tests passing.
   - Regression check: all 5 test suites (`fileValidator`, `chunkingEngine`, `retrievalEngine`, `askDocumentService`, `duplicateEngine`) -> 54/54 tests passing.
-- **Commit Hash**: `e706538`
+- **Commit Hash**: `62daa61`
 - **Push Status**: Pending push
 - **Outstanding Issues**: None.
 - **Next Milestone**: Milestone 3 (`feat: integrate duplicate detection backend`) on the next calendar day.
+
+### Milestone 3: Backend Duplicate Detection Service & Data-Access Integration (Day 3)
+- **Date**: 2026-10-17
+- **Work Performed**:
+  - Implemented [`Backend/utils/duplicateService.js`](../Backend/utils/duplicateService.js) bridging MongoDB `File` collection with `duplicateEngine`:
+    - `getUserFiles(userId, options)`: Isolates records per user with projection and `excludeFileId` support.
+    - `checkDuplicates(userId, incomingFile, options)`: Pre-screens incoming files against database records.
+    - `validateUpload(userId, file, allowDuplicate)`: Authoritative upload validation rejecting exact and high-confidence duplicates with `409 Conflict`, while honoring `allowDuplicate` bypass flag.
+    - `validateRename(userId, fileId, newOriginalName)`: Pre-checks rename actions to prevent collision with other files.
+    - `scanUserVault(userId)`: Audits entire user storage vault, grouping duplicate clusters and calculating recoverable storage quota.
+  - Integrated `duplicateService.validateUpload` into `POST /upload-file` in [`Backend/routes/index.routes.js`](../Backend/routes/index.routes.js).
+  - Authored comprehensive test suite [`Backend/tests/duplicateService.test.js`](../Backend/tests/duplicateService.test.js) (10 passing tests).
+- **Tests Executed**:
+  - `node Backend/tests/duplicateService.test.js` -> 10/10 unit tests passing.
+  - Full suite check: all 6 test suites (`fileValidator`, `chunkingEngine`, `retrievalEngine`, `askDocumentService`, `duplicateEngine`, `duplicateService`) -> 64/64 tests passing.
+- **Commit Hash**: `0775cb3`
+- **Push Status**: Pending push
+- **Outstanding Issues**: None.
+- **Next Milestone**: Milestone 4 (`feat: add duplicate detection API`) on the next calendar day.
 
 ---
 
