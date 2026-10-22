@@ -22,8 +22,8 @@ This document tracks the incremental, 7-day milestone-based implementation of **
 | Day | Milestone Target | Expected Commit Message | Target Date | Actual Date | Commit Hash | Push Status | Status |
 |:---:|---|---|:---:|:---:|:---:|:---:|:---:|
 | **Day 1** | Inspect repository, document architecture, define duplicate-matching rules, and establish test cases | `docs: define smart duplicate detection requirements` | 2026-10-15 | 2026-10-15 | `887f2fd` | Pending push | ✅ Completed |
-| **Day 2** | Implement normalization utilities and core duplicate-matching algorithm with unit tests | `feat: add duplicate matching engine` | 2026-10-16 | 2026-10-16 | `e706538` | Pending push | ✅ Completed |
-| **Day 3** | Integrate duplicate detection with backend service layer / data-access layer | `feat: integrate duplicate detection backend` | 2026-10-17 | 2026-10-17 | `0775cb3` | Pending push | ✅ Completed |
+| **Day 2** | Implement normalization utilities and core duplicate-matching algorithm with unit tests | `feat: add duplicate matching engine` | 2026-10-16 | 2026-10-16 | `62daa61` | Pushed to `origin/main` | ✅ Completed |
+| **Day 3** | Integrate duplicate detection with backend service layer / data-access layer | `feat: integrate duplicate detection backend` | 2026-10-17 | 2026-10-17 | `ca02425` | Pushed to `origin/main` | ✅ Completed |
 | **Day 4** | Implement duplicate-checking API and consistent response handling | `feat: add duplicate detection API` | 2026-10-18 | — | — | — | ⏳ Scheduled |
 | **Day 5** | Build frontend warning modal, match display, confidence badge, and review actions | `feat: add duplicate warning interface` | 2026-10-19 | — | — | — | ⏳ Scheduled |
 | **Day 6** | Add edge-case handling, integration tests, regression tests, and performance optimizations | `test: harden smart duplicate detection` | 2026-10-20 | — | — | — | ⏳ Scheduled |
@@ -62,7 +62,7 @@ This document tracks the incremental, 7-day milestone-based implementation of **
   - `node Backend/tests/duplicateEngine.test.js` -> 18/18 unit tests passing.
   - Regression check: all 5 test suites (`fileValidator`, `chunkingEngine`, `retrievalEngine`, `askDocumentService`, `duplicateEngine`) -> 54/54 tests passing.
 - **Commit Hash**: `62daa61`
-- **Push Status**: Pending push
+- **Push Status**: Pushed to `origin/main`
 - **Outstanding Issues**: None.
 - **Next Milestone**: Milestone 3 (`feat: integrate duplicate detection backend`) on the next calendar day.
 
@@ -80,8 +80,8 @@ This document tracks the incremental, 7-day milestone-based implementation of **
 - **Tests Executed**:
   - `node Backend/tests/duplicateService.test.js` -> 10/10 unit tests passing.
   - Full suite check: all 6 test suites (`fileValidator`, `chunkingEngine`, `retrievalEngine`, `askDocumentService`, `duplicateEngine`, `duplicateService`) -> 64/64 tests passing.
-- **Commit Hash**: `0775cb3`
-- **Push Status**: Pending push
+- **Commit Hash**: `ca02425`
+- **Push Status**: Pushed to `origin/main`
 - **Outstanding Issues**: None.
 - **Next Milestone**: Milestone 4 (`feat: add duplicate detection API`) on the next calendar day.
 
