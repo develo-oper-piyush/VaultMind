@@ -571,12 +571,37 @@ While a file resides in the Recycle Bin:
   - Command: `npm test` (`node --test tests/**/*.test.js`)
   - Results: 71 passing tests across 26 suites (0 failures, 0 skipped, duration 6.9s).
 - **Known Limitations**:
-  - File deletion currently performs hard deletion; soft-delete transitions and Recycle Bin holding state are scheduled for Day 4.
-  - Frontend UI modals and dashboard version cards are scheduled for Day 5.
-- **Day 4 Planned Tasks**:
-  - Implement Recycle Bin soft-delete endpoints (`POST /files/:fileId/trash`, `POST /files/delete-file` soft-delete transition).
-  - Implement Recycle Bin listing (`GET /files/recycle-bin`) with retention countdown timers and version counts.
-  - Implement Recycle Bin restoration (`POST /files/recycle-bin/:fileId/restore`) with active quota enforcement and naming collision resolution (`(restored)` auto-suffix).
-  - Implement permanent purge (`DELETE /files/recycle-bin/:fileId` and bulk `empty`) with cascade deletion across Supabase Storage, `FileVersion`, `File`, and `DocumentChunk` records.
+  - Frontend UI components for version history modal and Recycle Bin dashboard view are scheduled for Day 5 and Day 6.
+- **Day 4 Planned Tasks**: Completed.
+
+### Day 4 — 2026-10-22
+- **Status**: Completed (Recycle Bin Backend Operations & Safe Cleanup)
+- **Endpoints Implemented & Protected**:
+  - `POST /files/delete-file` & `POST /files/:fileId/trash` (and `/api/files/...`): Transitioned existing file-deletion flow from destructive permanent hard delete to safe, recoverable soft deletion. Populates `isDeleted: true`, `deletedAt: now`, `deletionExpiresAt: now + 30 days`, `deletedBy: userId`, and preserves `originalFolder` metadata while keeping storage objects safely preserved.
+  - `GET /files/recycle-bin` (and `/api/files/recycle-bin`): Authenticated retrieval of only the requesting user's soft-deleted files ordered by `deletedAt: -1`. Enriches each entry with dynamic countdown timers (`daysRemaining`) and associated historical revision counts (`versionCount`).
+  - `POST /files/recycle-bin/:fileId/restore` (and `/api/files/recycle-bin/:fileId/restore`, `POST /files/:fileId/restore`): Restores soft-deleted files back to the active workspace. Enforces the active workspace quota of 12 files (`MAX_ACTIVE_FILES_PER_USER`), resolves naming collisions automatically by appending `(restored)` or `(restored 2)` suffixes, resets deletion metadata (`isDeleted: false`, `deletedAt: null`, `deletionExpiresAt: null`, `deletedBy: null`), and handles idempotent restorations (`alreadyActive`).
+  - `DELETE /files/recycle-bin/:fileId` (and `/api/files/recycle-bin/:fileId`): Permanently deletes a specific trashed file. Verifies file ownership and trash holding status, purges active and historical storage binaries from Supabase bucket `Files-upload`, and cascades database deletion across `DocumentChunk`, `FileVersion`, and `File` collections. Halts database deletion and raises 502 error if Supabase storage removal fails.
+  - `DELETE /files/recycle-bin/empty` (and `/api/files/recycle-bin/empty`, `POST` fallback): Bulk purges all soft-deleted files for the authenticated user. Registered ahead of `:fileId` routes to avoid route matching conflicts, deletes all associated storage binaries in batch, cascades database deletion across all dependent records, and reports exact deletion counts.
+  - **Active Endpoint Protection**:
+    - `GET /files/home`: Filtered to exclude `.emptyFolderPlaceholder`, `versions` directories, and all files with `isDeleted: true`, accurately reporting active workspace `fileCount`.
+    - `POST /files/upload-file`: Calculates user active file quota via `countActiveUserFiles`, allowing users with soft-deleted files to utilize their freed active workspace slots up to 12 files.
+    - `POST /files/search`: Excludes soft-deleted documents from TF-IDF and keyword search results.
+    - `GET /files/view-file/:fileName` & `GET /files/secure-file/:fileName`: Rejects access to soft-deleted files with `404 Not Found`.
+    - `POST /files/rename-file`: Blocks renaming files in the Recycle Bin with `400 Bad Request`.
+    - `GET /files/file-status/:fileId`: Rejects status polling for soft-deleted files with `404 Not Found`.
+- **Files Modified / Added**:
+  - `Backend/services/recycleBin.service.js`: Added `softDeleteFile`, `listRecycleBinFiles`, `restoreFileFromTrash`, `permanentlyDeleteFile`, and `emptyRecycleBin` with storage cascade cleanup and explicit error handling.
+  - `Backend/routes/index.routes.js`: Registered Day 4 Recycle Bin routes (`/recycle-bin`, `/recycle-bin/empty`, `/recycle-bin/:fileId/restore`, `/recycle-bin/:fileId`, `/:fileId/trash`), updated `delete-file` to soft delete, and protected active file routes.
+  - `Backend/utils/searchEngine.js`: Updated `searchFiles` to filter active files (`isDeleted: { $ne: true }`).
+  - `Frontend/lib/api.ts`: Added client wrapper methods (`getRecycleBin`, `restoreFileFromTrash`, `permanentlyDeleteFile`, `emptyRecycleBin`, `trashFile`).
+  - `Backend/tests/recycleBin.service.test.js`: Comprehensive unit tests covering retention calculation, collision resolution, soft deletion, listing, restore, quota enforcement, cascade purge, bulk empty, and storage failures.
+  - `Backend/tests/recycleBinRoutes.test.js`: Route integration tests validating authentication (401), parameter validation (400), route ordering precedence (`/empty` vs `:fileId`), and prefix routing consistency.
+  - `docs/file-version-history-recycle-bin-plan.md`: Updated implementation log and test results.
+- **Tests Executed & Real Results**:
+  - Command: `npm test` (`node --test tests/**/*.test.js`)
+  - Results: 110 passing tests across 37 suites (0 failures, 0 skipped, duration 2.55s).
+- **Day 5 Planned Tasks**:
+  - Implement File Version History UI: `VersionHistoryModal`, timeline layout, size delta indicators, and download/restore actions in `FileCard`.
+
 
 

@@ -133,6 +133,35 @@ class ApiClient {
     return `${this.baseURL}/files/secure-file/${encodeURIComponent(fileName)}`;
   }
 
+  // Recycle Bin Endpoints
+  async getRecycleBin() {
+    return this.request('/files/recycle-bin');
+  }
+
+  async restoreFileFromTrash(fileId: string) {
+    return this.request(`/files/recycle-bin/${fileId}/restore`, {
+      method: 'POST',
+    });
+  }
+
+  async permanentlyDeleteFile(fileId: string) {
+    return this.request(`/files/recycle-bin/${fileId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async emptyRecycleBin() {
+    return this.request('/files/recycle-bin/empty', {
+      method: 'DELETE',
+    });
+  }
+
+  async trashFile(fileId: string) {
+    return this.request(`/files/${fileId}/trash`, {
+      method: 'POST',
+    });
+  }
+
   // Ask VaultMind Document Chat Endpoints
   async askDocumentQuestion(payload: {
     question: string;

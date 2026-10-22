@@ -17,6 +17,16 @@ const {
     downloadHistoricalVersion,
     restoreFileVersion,
 } = require("../services/version.service");
+const {
+    DEFAULT_RETENTION_DAYS,
+    MAX_ACTIVE_FILES_PER_USER,
+    countActiveUserFiles,
+    softDeleteFile,
+    listRecycleBinFiles,
+    restoreFileFromTrash,
+    permanentlyDeleteFile,
+    emptyRecycleBin,
+} = require("../services/recycleBin.service");
 const { isValidObjectId } = require("../utils/fileValidation");
 
 const router = express.Router();
@@ -54,9 +64,9 @@ router.get("/home", authMiddleware, async (req, res) => {
             });
         }
 
-        // Filter out the .emptyFolderPlaceholder if it exists
+        // Filter out .emptyFolderPlaceholder and version directories
         const actualFiles = files.filter(
-            (file) => file.name !== ".emptyFolderPlaceholder"
+            (file) => file.name !== ".emptyFolderPlaceholder" && file.name !== "versions"
         );
 
         // Fetch MongoDB metadata for files
@@ -66,17 +76,26 @@ router.get("/home", authMiddleware, async (req, res) => {
             metadataMap[meta.fileName] = meta;
         });
 
+        // Filter out soft-deleted files from active listing
+        const activeFiles = actualFiles.filter((file) => {
+            const meta = metadataMap[file.name];
+            if (meta && meta.isDeleted === true) {
+                return false;
+            }
+            return true;
+        });
+
         // Use internal secure routes instead of direct Supabase URLs
         const baseUrl = process.env.BACKEND_URL || "http://localhost:5000";
-        const filesWithUrls = actualFiles.map((file) => {
+        const filesWithUrls = activeFiles.map((file) => {
             const meta = metadataMap[file.name] || {};
             return {
                 name: file.name,
                 fullPath: `${userId}/${file.name}`,
                 url: `${baseUrl}/files/secure-file/${encodeURIComponent(file.name)}`,
                 createdAt: file.created_at,
-                size: file.metadata?.size || 0,
-                mimetype: file.metadata?.mimetype || "unknown",
+                size: file.metadata?.size || meta.size || 0,
+                mimetype: file.metadata?.mimetype || meta.mimetype || "unknown",
                 tags: meta.tags || [],
                 category: meta.category || "Other",
                 summary: meta.summary || null,
@@ -181,21 +200,10 @@ router.post("/upload-file", authMiddleware, async (req, res) => {
                 );
         }
 
-        // Check current file count
-        const { data: existingFiles, error: listError } = await supabase.storage
-            .from("Files-upload")
-            .list(userId);
+        // Check current active file count (excluding soft-deleted items)
+        const activeFileCount = await countActiveUserFiles(userId);
 
-        if (listError) {
-            console.error("Error checking file count:", listError);
-            return res.status(500).send("Error checking file count");
-        }
-
-        const actualFileCount = existingFiles.filter(
-            (f) => f.name !== ".emptyFolderPlaceholder"
-        ).length;
-
-        if (actualFileCount >= MAX_FILES_PER_USER) {
+        if (activeFileCount >= MAX_FILES_PER_USER) {
             return res
                 .status(400)
                 .send(`Maximum file limit of ${MAX_FILES_PER_USER} reached`);
@@ -270,94 +278,98 @@ router.post("/upload-file", authMiddleware, async (req, res) => {
     }
 });
 
-// Delete file route
-router.post("/delete-file", authMiddleware, async (req, res) => {
+// Delete file route - updated to Soft Delete (moves to Recycle Bin)
+router.post(["/delete-file", "/files/delete-file"], authMiddleware, async (req, res) => {
     try {
-        const { fileName } = req.body;
+        const { fileName, fileId } = req.body || {};
         const userId = req.user.userId;
 
-        if (!fileName) {
-            console.error("No file name provided in request");
-            return res.status(400).json({ error: "No file name provided" });
+        if (!fileName && !fileId) {
+            return res.status(400).json({ error: "No file identifier provided" });
         }
 
-        // Construct the full file path
-        const filePath = `${userId}/${fileName}`;
+        const identifier = fileId || fileName;
+        const result = await softDeleteFile(identifier, userId);
 
-        console.log("=== DELETE FILE ATTEMPT ===");
-        console.log("User ID:", userId);
-        console.log("File Name:", fileName);
-        console.log("Full File Path:", filePath);
-        console.log("Bucket:", "Files-upload");
-
-        // First, check if the file exists
-        const { data: existingFiles, error: listError } = await supabase.storage
-            .from("Files-upload")
-            .list(userId);
-
-        if (listError) {
-            console.error("Error listing files:", listError);
-        } else {
-            console.log(
-                "Files in user folder:",
-                existingFiles.map((f) => f.name)
-            );
-            const fileExists = existingFiles.some((f) => f.name === fileName);
-            console.log("File exists in folder:", fileExists);
-        }
-
-        // Attempt to delete the file
-        const { data, error } = await supabase.storage
-            .from("Files-upload")
-            .remove([filePath]);
-
-        if (error) {
-            console.error("=== DELETE ERROR ===");
-            console.error("Error object:", JSON.stringify(error, null, 2));
-            console.error("Error message:", error.message);
-            console.error("Error status:", error.status);
-            return res.status(500).json({
-                error: "Error deleting file",
-                details: error.message,
-                path: filePath,
-            });
-        }
-
-        console.log("=== DELETE SUCCESS ===");
-        console.log("Delete response data:", data);
-
-        // Delete MongoDB document
-        await File.deleteOne({ userId, fileName });
-        console.log("MongoDB document deleted");
-
-        // Verify deletion
-        const { data: afterDelete, error: verifyError } = await supabase.storage
-            .from("Files-upload")
-            .list(userId);
-
-        if (!verifyError) {
-            const stillExists = afterDelete.some((f) => f.name === fileName);
-            console.log("File still exists after delete:", stillExists);
-        }
-
-        res.json({
+        return res.json({
             success: true,
-            message: "File deleted successfully",
-            deletedPath: filePath,
-            data,
+            message: result.alreadyDeleted
+                ? "File is already in Recycle Bin"
+                : "File moved to Recycle Bin successfully",
+            file: {
+                _id: result.file._id,
+                fileName: result.file.fileName,
+                originalName: result.file.originalName,
+                isDeleted: result.file.isDeleted,
+                deletedAt: result.file.deletedAt,
+                deletionExpiresAt: result.file.deletionExpiresAt,
+                deletedBy: result.file.deletedBy,
+            },
         });
     } catch (error) {
-        console.error("=== EXCEPTION IN DELETE ===");
-        console.error("Exception:", error);
-        res.status(500).json({ error: "Server error", details: error.message });
+        console.error("Delete file error:", error);
+        return res.status(error.status || 500).json({
+            success: false,
+            error: error.message || "Failed to delete file",
+        });
     }
 });
+
+// Explicit soft delete by fileId
+router.post(
+    ["/:fileId/trash", "/files/:fileId/trash", "/recycle-bin/:fileId/trash"],
+    authMiddleware,
+    async (req, res) => {
+        try {
+            const { fileId } = req.params;
+            const userId = req.user.userId;
+
+            if (!isValidObjectId(fileId)) {
+                return res.status(400).json({
+                    success: false,
+                    error: "Invalid file ID format",
+                });
+            }
+
+            const result = await softDeleteFile(fileId, userId);
+
+            return res.json({
+                success: true,
+                message: result.alreadyDeleted
+                    ? "File is already in Recycle Bin"
+                    : "File moved to Recycle Bin successfully",
+                file: {
+                    _id: result.file._id,
+                    fileName: result.file.fileName,
+                    originalName: result.file.originalName,
+                    isDeleted: result.file.isDeleted,
+                    deletedAt: result.file.deletedAt,
+                    deletionExpiresAt: result.file.deletionExpiresAt,
+                    deletedBy: result.file.deletedBy,
+                },
+            });
+        } catch (error) {
+            console.error("Trash file error:", error);
+            return res.status(error.status || 500).json({
+                success: false,
+                error: error.message || "Failed to move file to Recycle Bin",
+            });
+        }
+    }
+);
 
 // Secure file view route - generates a new signed URL
 router.get("/view-file/:fileName", authMiddleware, async (req, res) => {
     try {
         const { fileName } = req.params;
         const userId = req.user.userId;
+
+        // Ensure soft-deleted files are not accessible
+        const fileDoc = await File.findOne({ userId, fileName }).lean();
+        if (fileDoc && fileDoc.isDeleted) {
+            return res.status(404).send("File not found");
+        }
+
         const filePath = `${userId}/${fileName}`;
 
         // Create a signed URL that expires in 5 minutes
@@ -383,7 +395,15 @@ router.get("/secure-file/:fileName", authMiddleware, async (req, res) => {
     try {
         const { fileName } = req.params;
         const userId = req.user.userId;
-        const filePath = `${userId}/${decodeURIComponent(fileName)}`;
+        const decodedFileName = decodeURIComponent(fileName);
+
+        // Ensure soft-deleted files are not accessible
+        const fileDoc = await File.findOne({ userId, fileName: decodedFileName }).lean();
+        if (fileDoc && fileDoc.isDeleted) {
+            return res.status(404).send("File not found");
+        }
+
+        const filePath = `${userId}/${decodedFileName}`;
 
         console.log(`User ${userId} requesting file: ${filePath}`);
 
@@ -403,16 +423,16 @@ router.get("/secure-file/:fileName", authMiddleware, async (req, res) => {
             .list(userId);
 
         const fileMetadata = fileList?.find(
-            (f) => f.name === decodeURIComponent(fileName)
+            (f) => f.name === decodedFileName
         );
         const contentType =
-            fileMetadata?.metadata?.mimetype || "application/octet-stream";
+            fileMetadata?.metadata?.mimetype || fileDoc?.mimetype || "application/octet-stream";
 
         // Set headers and send file
         res.setHeader("Content-Type", contentType);
         res.setHeader(
             "Content-Disposition",
-            `inline; filename="${decodeURIComponent(fileName)}"`
+            `inline; filename="${decodedFileName}"`
         );
 
         // Convert blob to buffer and send
@@ -434,6 +454,12 @@ router.post("/rename-file", authMiddleware, async (req, res) => {
             return res
                 .status(400)
                 .json({ error: "Both old and new file names are required" });
+        }
+
+        // Prevent renaming a soft-deleted file in Recycle Bin
+        const fileDoc = await File.findOne({ userId, fileName: oldFileName });
+        if (fileDoc && fileDoc.isDeleted) {
+            return res.status(400).json({ error: "Cannot rename a file that is in the Recycle Bin" });
         }
 
         // Sanitize new file name (keep the timestamp prefix from old file)
@@ -494,6 +520,13 @@ router.post("/rename-file", authMiddleware, async (req, res) => {
             return res.status(500).json({ error: "Error completing rename" });
         }
 
+        if (fileDoc) {
+            fileDoc.fileName = sanitizedNewName;
+            fileDoc.supabasePath = newPath;
+            fileDoc.updatedAt = new Date();
+            await fileDoc.save();
+        }
+
         res.json({
             success: true,
             message: "File renamed successfully",
@@ -548,7 +581,11 @@ router.get(["/file-status/:fileId", "/api/file-status/:fileId"], authMiddleware,
         const { fileId } = req.params;
         const userId = req.user.userId;
 
-        const file = await File.findOne({ _id: fileId, userId }).lean();
+        if (!isValidObjectId(fileId)) {
+            return res.status(400).json({ error: "Invalid file ID format" });
+        }
+
+        const file = await File.findOne({ _id: fileId, userId, isDeleted: { $ne: true } }).lean();
 
         if (!file) {
             return res.status(404).json({ error: "File not found" });
@@ -757,6 +794,156 @@ router.post(
             return res.status(error.status || 500).json({
                 success: false,
                 error: error.message || "Failed to restore file version",
+            });
+        }
+    }
+);
+
+// ==========================================
+// Recycle Bin Endpoints (Day 4)
+// ==========================================
+
+// 1. List soft-deleted files in Recycle Bin
+router.get(["/recycle-bin", "/files/recycle-bin"], authMiddleware, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const files = await listRecycleBinFiles(userId);
+
+        return res.json({
+            success: true,
+            count: files.length,
+            files,
+        });
+    } catch (error) {
+        console.error("List recycle bin error:", error);
+        return res.status(error.status || 500).json({
+            success: false,
+            error: error.message || "Failed to list Recycle Bin items",
+        });
+    }
+});
+
+// 2. Empty Recycle Bin (Permanently purge all deleted files for authenticated user)
+// NOTE: Registered BEFORE /:fileId routes so /empty is not treated as a :fileId parameter.
+router.delete(["/recycle-bin/empty", "/files/recycle-bin/empty"], authMiddleware, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const result = await emptyRecycleBin(userId);
+
+        return res.json({
+            success: true,
+            message: result.message,
+            deletedCount: result.deletedCount,
+            deletedFileIds: result.deletedFileIds,
+            deletedStoragePathsCount: result.deletedStoragePathsCount,
+        });
+    } catch (error) {
+        console.error("Empty recycle bin error:", error);
+        return res.status(error.status || 500).json({
+            success: false,
+            error: error.message || "Failed to empty Recycle Bin",
+        });
+    }
+});
+
+// Fallback POST /empty for clients where DELETE with empty body is not preferred
+router.post(["/recycle-bin/empty", "/files/recycle-bin/empty"], authMiddleware, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const result = await emptyRecycleBin(userId);
+
+        return res.json({
+            success: true,
+            message: result.message,
+            deletedCount: result.deletedCount,
+            deletedFileIds: result.deletedFileIds,
+            deletedStoragePathsCount: result.deletedStoragePathsCount,
+        });
+    } catch (error) {
+        console.error("Empty recycle bin error:", error);
+        return res.status(error.status || 500).json({
+            success: false,
+            error: error.message || "Failed to empty Recycle Bin",
+        });
+    }
+});
+
+// 3. Restore a soft-deleted file back to active workspace
+router.post(
+    ["/recycle-bin/:fileId/restore", "/files/recycle-bin/:fileId/restore", "/:fileId/restore", "/files/:fileId/restore"],
+    authMiddleware,
+    async (req, res) => {
+        try {
+            const { fileId } = req.params;
+            const userId = req.user.userId;
+
+            if (!isValidObjectId(fileId)) {
+                return res.status(400).json({
+                    success: false,
+                    error: "Invalid file ID format",
+                });
+            }
+
+            const result = await restoreFileFromTrash(fileId, userId);
+
+            return res.json({
+                success: true,
+                message: result.alreadyActive
+                    ? "File is already active"
+                    : result.renamed
+                    ? `File restored successfully as "${result.restoredName}" to resolve name conflict`
+                    : "File restored successfully",
+                renamed: result.renamed || false,
+                restoredName: result.restoredName,
+                alreadyActive: result.alreadyActive || false,
+                file: {
+                    _id: result.file._id,
+                    fileName: result.file.fileName,
+                    originalName: result.file.originalName,
+                    isDeleted: result.file.isDeleted,
+                    deletedAt: result.file.deletedAt,
+                    updatedAt: result.file.updatedAt,
+                },
+            });
+        } catch (error) {
+            console.error("Restore file error:", error);
+            return res.status(error.status || 500).json({
+                success: false,
+                error: error.message || "Failed to restore file from Recycle Bin",
+            });
+        }
+    }
+);
+
+// 4. Permanently delete a specific trashed file
+router.delete(
+    ["/recycle-bin/:fileId", "/files/recycle-bin/:fileId"],
+    authMiddleware,
+    async (req, res) => {
+        try {
+            const { fileId } = req.params;
+            const userId = req.user.userId;
+
+            if (!isValidObjectId(fileId)) {
+                return res.status(400).json({
+                    success: false,
+                    error: "Invalid file ID format",
+                });
+            }
+
+            const result = await permanentlyDeleteFile(fileId, userId);
+
+            return res.json({
+                success: true,
+                message: result.message,
+                deletedFileId: result.deletedFileId,
+                deletedStoragePaths: result.deletedStoragePaths,
+            });
+        } catch (error) {
+            console.error("Permanent delete error:", error);
+            return res.status(error.status || 500).json({
+                success: false,
+                error: error.message || "Failed to permanently delete file",
             });
         }
     }
