@@ -93,9 +93,12 @@ class ApiClient {
     return this.request('/files/home');
   }
 
-  async uploadFile(file: File) {
+  async uploadFile(file: File, allowDuplicate: boolean = false) {
     const formData = new FormData();
     formData.append('file', file);
+    if (allowDuplicate) {
+      formData.append('allowDuplicate', 'true');
+    }
 
     const response = await fetch(`${this.baseURL}/files/upload-file`, {
       method: 'POST',
@@ -105,9 +108,60 @@ class ApiClient {
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(data.error || data.message || `Upload failed with status ${response.status}`);
+      const error: any = new Error(data.error || data.message || `Upload failed with status ${response.status}`);
+      error.status = response.status;
+      error.data = data;
+      throw error;
     }
     return data;
+  }
+
+  async checkDuplicate(payload: {
+    originalName: string;
+    size: number;
+    mimetype?: string;
+    category?: string;
+    excludeFileId?: string;
+  }) {
+    return this.request<{
+      success: boolean;
+      isDuplicate: boolean;
+      confidenceLevel: 'EXACT' | 'HIGH' | 'MODERATE' | 'NONE';
+      highestScore: number;
+      duplicates: Array<{
+        fileId: string;
+        fileName: string;
+        originalName: string;
+        size: number;
+        mimetype: string;
+        category?: string;
+        createdAt?: string;
+        similarityScore: number;
+        confidenceLevel: string;
+        reasons: string[];
+      }>;
+      message: string;
+    }>('/files/check-duplicate', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async scanDuplicates() {
+    return this.request<{
+      success: boolean;
+      fileCount: number;
+      duplicateGroupCount: number;
+      duplicateGroups: Array<{
+        primaryFile: any;
+        duplicates: any[];
+        redundantCount: number;
+        wastedBytes: number;
+        formattedWastedBytes: string;
+      }>;
+      totalWastedBytes: number;
+      formattedWastedBytes: string;
+    }>('/files/duplicates');
   }
 
   async getSupportedFormats() {

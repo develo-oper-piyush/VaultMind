@@ -24,7 +24,7 @@ This document tracks the incremental, 7-day milestone-based implementation of **
 | **Day 1** | Inspect repository, document architecture, define duplicate-matching rules, and establish test cases | `docs: define smart duplicate detection requirements` | 2026-10-15 | 2026-10-15 | `887f2fd` | Pending push | ✅ Completed |
 | **Day 2** | Implement normalization utilities and core duplicate-matching algorithm with unit tests | `feat: add duplicate matching engine` | 2026-10-16 | 2026-10-16 | `62daa61` | Pushed to `origin/main` | ✅ Completed |
 | **Day 3** | Integrate duplicate detection with backend service layer / data-access layer | `feat: integrate duplicate detection backend` | 2026-10-17 | 2026-10-17 | `ca02425` | Pushed to `origin/main` | ✅ Completed |
-| **Day 4** | Implement duplicate-checking API and consistent response handling | `feat: add duplicate detection API` | 2026-10-18 | — | — | — | ⏳ Scheduled |
+| **Day 4** | Implement duplicate-checking API and consistent response handling | `feat: add duplicate detection API` | 2026-10-18 | 2026-10-18 | `68bd6b8` | Pushed to `origin/main` | ✅ Completed |
 | **Day 5** | Build frontend warning modal, match display, confidence badge, and review actions | `feat: add duplicate warning interface` | 2026-10-19 | — | — | — | ⏳ Scheduled |
 | **Day 6** | Add edge-case handling, integration tests, regression tests, and performance optimizations | `test: harden smart duplicate detection` | 2026-10-20 | — | — | — | ⏳ Scheduled |
 | **Day 7** | End-to-end verification, issue fixes, final documentation, and verification report | `docs: finalize smart duplicate detection` | 2026-10-21 | — | — | — | ⏳ Scheduled |
@@ -84,6 +84,21 @@ This document tracks the incremental, 7-day milestone-based implementation of **
 - **Push Status**: Pushed to `origin/main`
 - **Outstanding Issues**: None.
 - **Next Milestone**: Milestone 4 (`feat: add duplicate detection API`) on the next calendar day.
+
+### Milestone 4: Duplicate-Checking API & Consistent Response Handling (Day 4)
+- **Date**: 2026-10-18
+- **Work Performed**:
+  - Implemented `POST /files/check-duplicate` (and `/api/files/check-duplicate`) in [`Backend/routes/index.routes.js`](../Backend/routes/index.routes.js) with strict payload validation (`originalName`, `size`, `mimetype`, `category`, `excludeFileId`).
+  - Implemented `GET /files/duplicates` (and `/api/files/duplicates`) for storage vault audit, duplicate cluster identification, and wasted byte quota reporting.
+  - Extended frontend API client [`Frontend/lib/api.ts`](../Frontend/lib/api.ts) with typed `checkDuplicate`, `scanDuplicates`, and `allowDuplicate` upload bypass support.
+  - Authored automated unit & integration test suite [`Backend/tests/duplicateApi.test.js`](../Backend/tests/duplicateApi.test.js) (8/8 tests passing) covering payload validation, exact duplicate contract, copy-suffix detection, clean non-duplicates, self-exclusion during rename, and vault audits.
+- **Tests Executed**:
+  - `node Backend/tests/duplicateApi.test.js` -> 8/8 unit tests passing.
+  - Full regression check: all 7 test suites (`fileValidator`, `chunkingEngine`, `retrievalEngine`, `askDocumentService`, `duplicateEngine`, `duplicateService`, `duplicateApi`) -> 72/72 tests passing.
+- **Commit Hash**: `68bd6b8`
+- **Push Status**: Pushed to `origin/main`
+- **Outstanding Issues**: None.
+- **Next Milestone**: Milestone 5 (`feat: add duplicate warning interface`) on the next calendar day.
 
 ---
 

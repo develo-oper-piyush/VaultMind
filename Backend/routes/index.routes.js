@@ -740,4 +740,72 @@ router.post(["/retrieve", "/api/files/retrieve", "/api/chat/retrieve"], authMidd
     }
 });
 
+/**
+ * Smart Duplicate Detection Endpoints (Day 4)
+ */
+
+// Pre-screening duplicate checking endpoint for upload & rename workflows
+router.post(
+    ["/check-duplicate", "/api/files/check-duplicate"],
+    authMiddleware,
+    async (req, res) => {
+        try {
+            const { originalName, size, mimetype, category, excludeFileId } = req.body;
+            const userId = req.user.userId;
+
+            if (!originalName || typeof originalName !== "string" || originalName.trim().length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: "originalName is required and must be a non-empty string.",
+                });
+            }
+
+            if (size === undefined || size === null || isNaN(Number(size)) || Number(size) < 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: "size is required and must be a non-negative number in bytes.",
+                });
+            }
+
+            const checkResult = await duplicateService.checkDuplicates(
+                userId,
+                {
+                    originalName: originalName.trim(),
+                    size: Number(size),
+                    mimetype: mimetype || null,
+                    category: category || null,
+                },
+                { excludeFileId }
+            );
+
+            return res.json(checkResult);
+        } catch (error) {
+            console.error("Check duplicate error:", error);
+            return res.status(500).json({
+                success: false,
+                error: "Internal server error checking file duplicates.",
+            });
+        }
+    }
+);
+
+// Audit user storage vault for duplicate clusters and recoverable quota
+router.get(
+    ["/duplicates", "/api/files/duplicates"],
+    authMiddleware,
+    async (req, res) => {
+        try {
+            const userId = req.user.userId;
+            const auditResult = await duplicateService.scanUserVault(userId);
+            return res.json(auditResult);
+        } catch (error) {
+            console.error("Audit duplicates error:", error);
+            return res.status(500).json({
+                success: false,
+                error: "Failed to audit user storage vault for duplicates.",
+            });
+        }
+    }
+);
+
 module.exports = router;
