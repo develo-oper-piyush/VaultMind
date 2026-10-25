@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import ThemeToggle from '@/components/ThemeToggle';
 import { FileCard } from '@/components/FileCard';
+import { DuplicateWarningModal, DuplicateCandidate } from '@/components/DuplicateWarningModal';
 import {
   PersonIcon,
   MagnifyingGlassIcon,
@@ -46,6 +47,19 @@ export default function Dashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [processingFiles, setProcessingFiles] = useState<Set<string>>(new Set());
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+
+  // Duplicate Warning Modal state (Day 5)
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+  const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null);
+  const [duplicateCheckData, setDuplicateCheckData] = useState<{
+    confidenceLevel: 'EXACT' | 'HIGH' | 'MODERATE' | 'NONE';
+    highestScore: number;
+    duplicates: DuplicateCandidate[];
+  }>({
+    confidenceLevel: 'NONE',
+    highestScore: 0,
+    duplicates: [],
+  });
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -162,6 +176,27 @@ export default function Dashboard() {
     setFilteredFiles(filtered);
   };
 
+  const executeUpload = async (fileToUpload: File, allowDuplicate: boolean = false) => {
+    setUploading(true);
+    setUploadStatus(`Uploading "${fileToUpload.name}" (${(fileToUpload.size / 1024).toFixed(1)} KB)...`);
+    setError('');
+
+    try {
+      await apiClient.uploadFile(fileToUpload, allowDuplicate);
+      setUploadStatus(`File uploaded! Processing AI analysis and indexing...`);
+      await fetchFiles();
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setTimeout(() => setUploadStatus(null), 4000);
+      setDuplicateModalOpen(false);
+      setPendingUploadFile(null);
+    } catch (err: any) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
+      setUploadStatus(null);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -188,21 +223,68 @@ export default function Dashboard() {
     }
 
     setUploading(true);
-    setUploadStatus(`Uploading "${file.name}" (${(file.size / 1024).toFixed(1)} KB)...`);
+    setUploadStatus(`Screening "${file.name}" for duplicate records...`);
     setError('');
 
     try {
-      await apiClient.uploadFile(file);
-      setUploadStatus(`File uploaded! Processing AI analysis and indexing...`);
-      await fetchFiles();
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      setTimeout(() => setUploadStatus(null), 4000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed');
+      // Pre-screen file for potential duplicate conflicts
+      const checkRes = await apiClient.checkDuplicate({
+        originalName: file.name,
+        size: file.size,
+        mimetype: file.type || undefined,
+      });
+
+      if (checkRes.success && checkRes.isDuplicate && checkRes.confidenceLevel !== 'NONE') {
+        setPendingUploadFile(file);
+        setDuplicateCheckData({
+          confidenceLevel: checkRes.confidenceLevel,
+          highestScore: checkRes.highestScore,
+          duplicates: checkRes.duplicates,
+        });
+        setDuplicateModalOpen(true);
+        setUploading(false);
+        setUploadStatus(null);
+        return;
+      }
+
+      // If clean, proceed directly with upload
+      await executeUpload(file, false);
+    } catch (err: any) {
+      if (err?.status === 409 && err?.data?.isDuplicate) {
+        // Authoritative duplicate detected by backend
+        setPendingUploadFile(file);
+        setDuplicateCheckData({
+          confidenceLevel: err.data.confidenceLevel || 'EXACT',
+          highestScore: err.data.highestScore || 1.0,
+          duplicates: err.data.duplicates || (err.data.file ? [err.data.file] : []),
+        });
+        setDuplicateModalOpen(true);
+      } else {
+        setError(err instanceof Error ? err.message : 'Upload failed');
+      }
       setUploadStatus(null);
-    } finally {
       setUploading(false);
     }
+  };
+
+  const handleDuplicateCancel = () => {
+    setDuplicateModalOpen(false);
+    setPendingUploadFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleDuplicateUploadAnyway = async () => {
+    if (!pendingUploadFile) return;
+    await executeUpload(pendingUploadFile, true);
+  };
+
+  const handleDuplicateRenameAndSave = async (newName: string) => {
+    if (!pendingUploadFile) return;
+    const renamedFile = new File([pendingUploadFile], newName, {
+      type: pendingUploadFile.type,
+      lastModified: pendingUploadFile.lastModified,
+    });
+    await executeUpload(renamedFile, false);
   };
 
   const handleDelete = async (fileName: string) => {
@@ -530,6 +612,19 @@ export default function Dashboard() {
         </div>
       </div>
     </div>
+
+    {/* Duplicate Warning Modal (Day 5) */}
+    <DuplicateWarningModal
+      isOpen={duplicateModalOpen}
+      incomingFile={pendingUploadFile}
+      confidenceLevel={duplicateCheckData.confidenceLevel}
+      highestScore={duplicateCheckData.highestScore}
+      duplicates={duplicateCheckData.duplicates}
+      onCancel={handleDuplicateCancel}
+      onUploadAnyway={handleDuplicateUploadAnyway}
+      onRenameAndSave={handleDuplicateRenameAndSave}
+      isUploading={uploading}
+    />
   </ScrollProgressProvider>
 );
 }
