@@ -600,8 +600,56 @@ While a file resides in the Recycle Bin:
 - **Tests Executed & Real Results**:
   - Command: `npm test` (`node --test tests/**/*.test.js`)
   - Results: 110 passing tests across 37 suites (0 failures, 0 skipped, duration 2.55s).
-- **Day 5 Planned Tasks**:
-  - Implement File Version History UI: `VersionHistoryModal`, timeline layout, size delta indicators, and download/restore actions in `FileCard`.
+- **Day 5 Planned Tasks**: Completed.
 
-
-
+### Day 5 — 2026-10-26
+- **Status**: Completed (File Version History UI & Integration)
+- **UI Components Created / Modified**:
+  - `Frontend/components/VersionHistoryModal.tsx`: Created responsive, accessible glassmorphism dark/light modal featuring:
+    - Chronological timeline displaying available versions in descending version-number order (`v{versionNumber}`).
+    - Dynamic "Current Active" badge on the active version with emerald border and glowing timeline node.
+    - Sizing delta indicator showing size differences compared to the preceding version (+/- KB or same size).
+    - Formatted locale creation date and timestamp.
+    - Change summary / comment display with stylized quote strip.
+    - Truncated SHA-256 content hash badge.
+    - Single-version / legacy file handling (displaying clear initial release status).
+    - Historical version download action with per-item loading spinner and disabled state preventing duplicate requests.
+    - Non-destructive restoration workflow with double-confirmation dialog explaining that restoring creates a brand new version ($N+1$) rather than deleting or modifying historical records.
+    - Restoration change summary input with automated default (`Restored from version K`).
+    - Revision upload drawer allowing upload of new file iterations directly from the modal with comments.
+    - Prevented state updates after unmount with `isMountedRef` lifecycle guard.
+  - `Frontend/components/FileCard.tsx`:
+    - Added `onOpenVersionHistory` callback prop.
+    - Added clickable `v{currentVersion}` badge on card top header opening the Version History modal.
+    - Added "Version History" option in the contextual dropdown menu with `CounterClockwiseClockIcon`.
+  - `Frontend/app/dashboard/page.tsx`:
+    - Connected `VersionHistoryModal` with modal state management (`versionModalFile`, `isVersionModalOpen`).
+    - Provided `onOpenVersionHistory` handler to all file cards.
+    - Wired `onVersionRestored` and `onVersionUploaded` callbacks to trigger active file list refresh (`fetchFiles()`) and update modal file state seamlessly.
+- **API Client & Backend Contract Updates**:
+  - `Frontend/lib/api.ts`:
+    - Added typed methods: `getFileVersions(fileId)`, `downloadFileVersion(fileId, versionId, fallbackFilename)`, `restoreFileVersion(fileId, versionId, changeSummary)`, and `uploadFileVersion(fileId, file, changeSummary)`.
+    - Implemented safe binary blob download handling, parsing `Content-Disposition` header for RFC 5987 UTF-8 filenames (`filename*=UTF-8''...`) and standard quoted filenames (`filename="..."`), creating temporary object URLs, and triggering client download.
+    - Preserved all Day 4 Recycle Bin client methods (`getRecycleBin`, `restoreFileFromTrash`, `permanentlyDeleteFile`, `emptyRecycleBin`, `trashFile`).
+  - `Frontend/types/index.ts`:
+    - Added interfaces: `FileVersion`, `FileVersionsResponse`, `RestoreVersionResponse`, `UploadVersionResponse`.
+    - Augmented `FileItem` with `currentVersion?: number; totalVersions?: number;`.
+  - `Backend/routes/index.routes.js`:
+    - Updated `GET /files/home` mapping to include `currentVersion`, `totalVersions`, and `originalName` directly in active file responses.
+- **Tests Executed & Real Results**:
+  - Frontend Unit Tests:
+    - Command: `npm test` (`node --test tests/**/*.test.mjs`) in `Frontend/`
+    - Suite: `tests/versionHistory.api.test.mjs`
+    - Results: 12 passing tests across 5 suites (0 failures, 0 skipped, duration 0.38s).
+    - Validated: Version listing endpoint & credentials, download binary handling & UTF-8 header parsing, fallback filename resolution, download error propagation, restore payload dispatch, restore 400 error handling, descending version order sorting, size delta calculations, restoration eligibility invariants, and Day 4 Recycle Bin method preservation.
+  - Frontend Production Build & TypeScript:
+    - Command: `npm run build` (`next build`) in `Frontend/`
+    - Results: Compiled successfully in 2.8s, TypeScript type check passed in 7.0s, all 9 static routes generated with 0 errors.
+  - Backend Tests:
+    - Command: `npm test` (`node --test tests/**/*.test.js`) in `Backend/`
+    - Results: 110 passing tests across 37 suites (0 failures, 0 skipped, duration 3.31s).
+    - Validated: File models, version service, recycle bin service, migrations, version routes, recycle bin routes, anti-traversal security, and Day 4 backend endpoints completely preserved.
+- **Known Limitations**:
+  - Recycle Bin frontend UI (trash navigation tab, retention countdown badges, bulk empty trash confirmation) is scheduled for Day 6.
+- **Day 6 Planned Tasks**:
+  - Implement Recycle Bin UI & dashboard integration (tab toggle, days remaining countdown, restore conflict dialog, permanent delete confirmation).

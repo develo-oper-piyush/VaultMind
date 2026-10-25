@@ -24,6 +24,8 @@ export interface FileItem {
   category?: string;
   summary?: string | null;
   chunkCount?: number;
+  currentVersion?: number;
+  totalVersions?: number;
   processingStatus?: {
     textExtracted: boolean;
     chunked?: boolean;
@@ -106,4 +108,59 @@ export interface AskDocumentResponse {
   retrievedChunksCount: number;
   modelUsed?: string;
   grounded: boolean;
+}
+
+// File Version History Types
+export interface FileVersion {
+  _id: string;
+  fileId: string;
+  versionNumber: number;
+  originalName: string;
+  size: number;
+  mimetype: string;
+  contentHash?: string;
+  changeSummary?: string;
+  summarySnapshot?: string | null;
+  tagsSnapshot?: string[];
+  createdBy?: string;
+  createdAt: string;
+}
+
+export interface FileVersionsResponse {
+  success: boolean;
+  fileId: string;
+  currentVersion: number;
+  totalVersions: number;
+  count: number;
+  versions: FileVersion[];
+}
+
+export interface RestoreVersionResponse {
+  success: boolean;
+  message: string;
+  version: FileVersion;
+  file: {
+    _id: string;
+    currentVersion: number;
+    totalVersions: number;
+    originalName: string;
+    size: number;
+    mimetype: string;
+    updatedAt: string;
+  };
+}
+
+export interface UploadVersionResponse {
+  success: boolean;
+  message: string;
+  version: FileVersion;
+  file: {
+    _id: string;
+    currentVersion: number;
+    totalVersions: number;
+    originalName: string;
+    size: number;
+    mimetype: string;
+    updatedAt: string;
+  };
 }

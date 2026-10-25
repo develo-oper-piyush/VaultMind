@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import ThemeToggle from '@/components/ThemeToggle';
 import { FileCard } from '@/components/FileCard';
+import { VersionHistoryModal } from '@/components/VersionHistoryModal';
 import {
   PersonIcon,
   MagnifyingGlassIcon,
@@ -45,6 +46,22 @@ export default function Dashboard() {
   const [copiedFileName, setCopiedFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [processingFiles, setProcessingFiles] = useState<Set<string>>(new Set());
+
+  // Version History Modal State
+  const [versionModalFile, setVersionModalFile] = useState<FileItem | null>(null);
+  const [isVersionModalOpen, setIsVersionModalOpen] = useState(false);
+
+  const handleOpenVersionHistory = (file: FileItem) => {
+    setVersionModalFile(file);
+    setIsVersionModalOpen(true);
+  };
+
+  const handleVersionUpdated = (fileId: string, updatedFile: Partial<FileItem>) => {
+    fetchFiles();
+    if (versionModalFile && versionModalFile._id === fileId) {
+      setVersionModalFile((prev) => (prev ? { ...prev, ...updatedFile } : null));
+    }
+  };
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -479,12 +496,22 @@ export default function Dashboard() {
                 file={file}
                 isProcessing={processingFiles.has(file._id || '')}
                 onDelete={handleDelete}
+                onOpenVersionHistory={handleOpenVersionHistory}
               />
             ))
           )}
         </div>
       </div>
     </div>
+
+    {/* Version History Modal */}
+    <VersionHistoryModal
+      isOpen={isVersionModalOpen}
+      file={versionModalFile}
+      onClose={() => setIsVersionModalOpen(false)}
+      onVersionRestored={handleVersionUpdated}
+      onVersionUploaded={handleVersionUpdated}
+    />
   </ScrollProgressProvider>
 );
 }

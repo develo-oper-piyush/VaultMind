@@ -105,6 +105,9 @@ router.get("/home", authMiddleware, async (req, res) => {
                     summarized: false,
                 },
                 _id: meta._id || null,
+                currentVersion: meta.currentVersion || 1,
+                totalVersions: meta.totalVersions || 1,
+                originalName: meta.originalName || file.name,
             };
         });
 

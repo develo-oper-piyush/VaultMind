@@ -1,3 +1,9 @@
+import type {
+  FileVersionsResponse,
+  RestoreVersionResponse,
+  UploadVersionResponse,
+} from '@/types';
+
 // API Configuration
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -160,6 +166,112 @@ class ApiClient {
     return this.request(`/files/${fileId}/trash`, {
       method: 'POST',
     });
+  }
+
+  // File Version History Endpoints (Day 5)
+  async getFileVersions(fileId: string): Promise<FileVersionsResponse> {
+    return this.request<FileVersionsResponse>(`/files/${encodeURIComponent(fileId)}/versions`);
+  }
+
+  async downloadFileVersion(
+    fileId: string,
+    versionId: string,
+    fallbackFilename?: string
+  ): Promise<{ blob: Blob; filename: string }> {
+    const url = `${this.baseURL}/files/${encodeURIComponent(fileId)}/versions/${encodeURIComponent(versionId)}/download`;
+    const response = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      let errorMessage = `Failed to download version (HTTP ${response.status})`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorData.message || errorMessage;
+      } catch {
+        const text = await response.text();
+        if (text) errorMessage = text;
+      }
+      throw new Error(errorMessage);
+    }
+
+    // Determine filename from Content-Disposition header if present
+    let filename = fallbackFilename || 'download';
+    const disposition = response.headers.get('content-disposition');
+    if (disposition) {
+      const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+      if (utf8Match && utf8Match[1]) {
+        try {
+          filename = decodeURIComponent(utf8Match[1]);
+        } catch {
+          filename = utf8Match[1];
+        }
+      } else {
+        const standardMatch = disposition.match(/filename="?([^";]+)"?/i);
+        if (standardMatch && standardMatch[1]) {
+          filename = standardMatch[1];
+        }
+      }
+    }
+
+    const blob = await response.blob();
+
+    // Trigger browser download if running in client environment
+    if (typeof window !== 'undefined') {
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    }
+
+    return { blob, filename };
+  }
+
+  async restoreFileVersion(
+    fileId: string,
+    versionId: string,
+    changeSummary?: string
+  ): Promise<RestoreVersionResponse> {
+    return this.request<RestoreVersionResponse>(
+      `/files/${encodeURIComponent(fileId)}/versions/${encodeURIComponent(versionId)}/restore`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ changeSummary }),
+      }
+    );
+  }
+
+  async uploadFileVersion(
+    fileId: string,
+    file: File,
+    changeSummary?: string
+  ): Promise<UploadVersionResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (changeSummary) {
+      formData.append('changeSummary', changeSummary);
+    }
+
+    const response = await fetch(
+      `${this.baseURL}/files/${encodeURIComponent(fileId)}/versions`,
+      {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      }
+    );
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `Upload failed with status ${response.status}`);
+    }
+
+    return data as UploadVersionResponse;
   }
 
   // Ask VaultMind Document Chat Endpoints
