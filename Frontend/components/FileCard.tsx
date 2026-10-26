@@ -5,7 +5,6 @@ import { cn } from "@/lib/utils";
 import { FileItem } from "@/types";
 import { apiClient } from "@/lib/api";
 import {
-  ExternalLinkIcon,
   DotsVerticalIcon,
   CopyIcon,
   CheckIcon,

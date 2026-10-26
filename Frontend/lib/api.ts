@@ -1,3 +1,5 @@
+import { Citation, ChatMessage } from '@/types';
+
 // API Configuration
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -28,23 +30,23 @@ class ApiClient {
       const response = await fetch(url, config);
       const contentType = response.headers.get('content-type');
 
-      let data: any;
+      let data: Record<string, unknown> = {};
       if (contentType && contentType.includes('application/json')) {
-        data = await response.json();
+        data = (await response.json()) as Record<string, unknown>;
       } else {
         if (!response.ok) {
           throw new Error(`Backend server error (HTTP ${response.status}). Please check backend API server.`);
         }
         const text = await response.text();
         try {
-          data = JSON.parse(text);
+          data = JSON.parse(text) as Record<string, unknown>;
         } catch {
           data = { message: text };
         }
       }
 
       if (!response.ok) {
-        throw new Error(data.error || data.message || `Request failed with status ${response.status}`);
+        throw new Error((data.error as string) || (data.message as string) || `Request failed with status ${response.status}`);
       }
 
       return data as T;
@@ -106,9 +108,9 @@ class ApiClient {
       credentials: 'include',
     });
 
-    const data = await response.json().catch(() => ({}));
+    const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
     if (!response.ok) {
-      const error: any = new Error(data.error || data.message || `Upload failed with status ${response.status}`);
+      const error = new Error(((data.error as string) || (data.message as string) || `Upload failed with status ${response.status}`)) as Error & { status?: number; data?: unknown };
       error.status = response.status;
       error.data = data;
       throw error;
@@ -153,8 +155,8 @@ class ApiClient {
       fileCount: number;
       duplicateGroupCount: number;
       duplicateGroups: Array<{
-        primaryFile: any;
-        duplicates: any[];
+        primaryFile: Record<string, unknown>;
+        duplicates: Array<Record<string, unknown>>;
         redundantCount: number;
         wastedBytes: number;
         formattedWastedBytes: string;
@@ -210,7 +212,7 @@ class ApiClient {
   }) {
     return this.request<{
       answer: string;
-      citations: any[];
+      citations: Citation[];
       conversationId: string;
       retrievedChunksCount: number;
       grounded: boolean;
@@ -223,7 +225,7 @@ class ApiClient {
   async getChatHistory(conversationId?: string) {
     const query = conversationId ? `?conversationId=${encodeURIComponent(conversationId)}` : '';
     return this.request<{
-      messages: any[];
+      messages: ChatMessage[];
       conversationId: string;
     }>(`/chat/history${query}`);
   }
@@ -240,7 +242,7 @@ class ApiClient {
 
   async getDocumentChunks(fileId: string) {
     return this.request<{
-      chunks: any[];
+      chunks: Array<Record<string, unknown>>;
       totalChunks: number;
     }>(`/files/chunks/${fileId}`);
   }
@@ -256,7 +258,7 @@ class ApiClient {
       query: string;
       totalFound: number;
       sufficientContext: boolean;
-      chunks: any[];
+      chunks: Array<Record<string, unknown>>;
     }>('/files/retrieve', {
       method: 'POST',
       body: JSON.stringify(payload),

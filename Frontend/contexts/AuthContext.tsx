@@ -21,25 +21,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
   const checkAuth = async () => {
     try {
-      const response: any = await apiClient.getProfile();
+      const response = await apiClient.getProfile() as { success: boolean; user?: User };
       if (response.success && response.user) {
         setUser(response.user);
       }
-    } catch (error) {
+    } catch {
       setUser(null);
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
   const login = async (username: string, password: string) => {
-    const response: any = await apiClient.login(username, password);
+    const response = await apiClient.login(username, password) as { success: boolean; user?: User };
     if (response.success && response.user) {
       setUser(response.user);
       router.push('/dashboard');
@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const register = async (username: string, email: string, password: string) => {
-    const response: any = await apiClient.register(username, email, password);
+    const response = await apiClient.register(username, email, password) as { success: boolean };
     if (response.success) {
       router.push('/login?registered=true');
     }

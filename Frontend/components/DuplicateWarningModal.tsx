@@ -8,7 +8,6 @@ import {
   CheckCircledIcon,
   UploadIcon,
   Pencil1Icon,
-  CrossCircledIcon,
 } from '@radix-ui/react-icons';
 
 export interface DuplicateCandidate {
@@ -56,12 +55,18 @@ export function DuplicateWarningModal({
   isUploading = false,
 }: DuplicateWarningModalProps) {
   const [isRenaming, setIsRenaming] = React.useState(false);
-  const [customName, setCustomName] = React.useState('');
+  const [customName, setCustomName] = React.useState(() => {
+    if (!incomingFile) return '';
+    const name = incomingFile.name;
+    const lastDot = name.lastIndexOf('.');
+    const base = lastDot !== -1 ? name.substring(0, lastDot) : name;
+    const ext = lastDot !== -1 ? name.substring(lastDot) : '';
+    return `${base}_v2${ext}`;
+  });
 
-  const topMatch = duplicates && duplicates.length > 0 ? duplicates[0] : null;
-
-  // Prepopulate suggested rename when modal opens or incomingFile changes
-  React.useEffect(() => {
+  const [prevFile, setPrevFile] = React.useState<File | null>(incomingFile);
+  if (incomingFile !== prevFile) {
+    setPrevFile(incomingFile);
     if (incomingFile) {
       const name = incomingFile.name;
       const lastDot = name.lastIndexOf('.');
@@ -70,7 +75,9 @@ export function DuplicateWarningModal({
       setCustomName(`${base}_v2${ext}`);
       setIsRenaming(false);
     }
-  }, [incomingFile, isOpen]);
+  }
+
+  const topMatch = duplicates && duplicates.length > 0 ? duplicates[0] : null;
 
   if (!isOpen || !incomingFile) {
     return null;

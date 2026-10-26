@@ -253,7 +253,7 @@ export default function Home() {
                   <div className="space-y-4 animate-in fade-in duration-300">
                     <div className="flex items-center gap-3 border border-primary/40 bg-background/80 px-4 py-3 rounded-xl shadow-inner">
                       <span className="text-primary font-bold">Query:</span>
-                      <span className="text-foreground italic">"Find financial statements or invoices from last quarter"</span>
+                      <span className="text-foreground italic">&quot;Find financial statements or invoices from last quarter&quot;</span>
                     </div>
                     <div className="p-4 rounded-xl bg-primary/5 border border-primary/20">
                       <div className="flex justify-between items-start mb-2">
@@ -261,7 +261,7 @@ export default function Home() {
                         <span className="text-xs px-2.5 py-1 rounded-full bg-primary/20 text-primary font-semibold">98% Match</span>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Matches document content: "Quarterly earnings report, billing breakdown, total payable: $4,500."
+                        Matches document content: &quot;Quarterly earnings report, billing breakdown, total payable: $4,500.&quot;
                       </p>
                     </div>
                   </div>
@@ -288,7 +288,7 @@ export default function Home() {
                     <div className="p-4 rounded-xl bg-background/60 border border-border/60">
                       <span className="text-xs font-bold text-primary uppercase tracking-wider block mb-2">AI Summary Output</span>
                       <p className="text-sm text-foreground leading-relaxed italic">
-                        "This document outlines the project roadmap for Q3 2026, focusing on cloud infrastructure scaling, Supabase storage integration, and Gemini AI search capabilities."
+                        &quot;This document outlines the project roadmap for Q3 2026, focusing on cloud infrastructure scaling, Supabase storage integration, and Gemini AI search capabilities.&quot;
                       </p>
                     </div>
                   </div>

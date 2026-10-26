@@ -8,7 +8,6 @@ export type AvatarIconVariant = 'cyan-blue' | 'purple-magenta' | 'coral-orange' 
 interface AvatarGradientIconProps extends React.HTMLAttributes<HTMLDivElement> {
   variant: AvatarIconVariant;
   size?: 'sm' | 'md' | 'lg' | 'xl';
-  showBadge?: boolean;
 }
 
 const SIZE_CLASSES = {
@@ -21,7 +20,6 @@ const SIZE_CLASSES = {
 export function AvatarGradientIcon({
   variant,
   size = 'lg',
-  showBadge = false,
   className,
   ...props
 }: AvatarGradientIconProps) {

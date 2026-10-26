@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiClient } from '@/lib/api';
 import { FileItem } from '@/types';
@@ -28,23 +29,14 @@ const DEFAULT_SAMPLE_PHOTOS = [
 ];
 
 export default function PhotosPage() {
+  const router = useRouter();
   const { user, logout, loading: authLoading } = useAuth();
   const [photoFiles, setPhotoFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      window.location.href = '/login';
-    }
-  }, [user, authLoading]);
-
-  useEffect(() => {
-    fetchPhotos();
-  }, []);
-
   const fetchPhotos = async () => {
     try {
-      const data: any = await apiClient.getFiles();
+      const data = (await apiClient.getFiles()) as { files?: FileItem[] };
       const allFiles: FileItem[] = data.files || [];
       const imagesOnly = allFiles.filter((f) => {
         if (!f.mimetype) return /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(f.name);
@@ -57,6 +49,16 @@ export default function PhotosPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, authLoading, router]);
+
+  useEffect(() => {
+    fetchPhotos();
+  }, []);
 
   // Convert uploaded photo items or fallback to sample items
   const userPhotoItems = photoFiles.map((f) => {

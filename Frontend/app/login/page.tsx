@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, FormEvent, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -11,7 +11,6 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
   const { login } = useAuth();
   const searchParams = useSearchParams();
   const registered = searchParams.get('registered');
@@ -110,7 +109,7 @@ function LoginForm() {
       </form>
 
       <p className="text-center text-sm text-muted-foreground mt-8">
-        Don't have an account?{' '}
+        Don&apos;t have an account?{' '}
         <Link href="/register" className="text-primary font-semibold hover:underline">
           Register here
         </Link>

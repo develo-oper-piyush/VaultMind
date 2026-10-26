@@ -28,7 +28,6 @@ export default function StrokeText({
   strokeWidth = 1.4,
   drawDuration = 1.6,
   fillDelay = 0.4,
-  stagger = 0.075,
   ease = 'power2.out',
   trigger = 'mount',
   fillMode = 'wipe',

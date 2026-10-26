@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiClient } from '@/lib/api';
 import { FileItem } from '@/types';
@@ -22,12 +23,6 @@ import {
   ArchiveIcon,
   BookmarkIcon,
   CaretSortIcon,
-  CopyIcon,
-  CheckIcon,
-  TrashIcon,
-  ExternalLinkIcon,
-  DotsVerticalIcon,
-  ReaderIcon,
 } from '@radix-ui/react-icons';
 import {
   ScrollProgressProvider,
@@ -35,9 +30,9 @@ import {
 } from '@/components/animate-ui/primitives/animate/scroll-progress';
 
 export default function Dashboard() {
+  const router = useRouter();
   const { user, logout, loading: authLoading } = useAuth();
   const [files, setFiles] = useState<FileItem[]>([]);
-  const [filteredFiles, setFilteredFiles] = useState<FileItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -45,7 +40,6 @@ export default function Dashboard() {
   const [uploading, setUploading] = useState(false);
   const [fetchingFiles, setFetchingFiles] = useState(true);
   const [error, setError] = useState('');
-  const [copiedFileName, setCopiedFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [processingFiles, setProcessingFiles] = useState<Set<string>>(new Set());
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
@@ -67,34 +61,18 @@ export default function Dashboard() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [selectedChatFile, setSelectedChatFile] = useState<FileItem | null>(null);
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      window.location.href = '/login';
-    }
-  }, [user, authLoading]);
-
-  useEffect(() => {
-    fetchFiles();
-    const interval = setInterval(pollProcessingStatus, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    applyFilters();
-  }, [files, searchQuery, typeFilter, categoryFilter, sortBy]);
-
   const fetchFiles = async () => {
     try {
-      const data: any = await apiClient.getFiles();
+      const data = (await apiClient.getFiles()) as { files?: FileItem[] };
       setFiles(data.files || []);
       setProcessingFiles(
         new Set(
           (data.files || [])
             .filter((f: FileItem) => f._id && (!f.processingStatus?.textExtracted || !f.processingStatus?.tagged || !f.processingStatus?.summarized))
-            .map((f: FileItem) => f._id)
+            .map((f: FileItem) => f._id as string)
         )
       );
-    } catch (err) {
+    } catch {
       setError('Failed to fetch files');
     } finally {
       setFetchingFiles(false);
@@ -106,7 +84,13 @@ export default function Dashboard() {
 
     for (const fileId of processingFiles) {
       try {
-        const data: any = await apiClient.getFileStatus(fileId);
+        const data = (await apiClient.getFileStatus(fileId)) as {
+          processingStatus?: {
+            textExtracted: boolean;
+            tagged: boolean;
+            summarized: boolean;
+          };
+        };
         if (
           data.processingStatus?.textExtracted &&
           data.processingStatus?.tagged &&
@@ -141,7 +125,7 @@ export default function Dashboard() {
     return 'other';
   };
 
-  const applyFilters = () => {
+  const filteredFiles = useMemo(() => {
     let filtered = files;
 
     if (typeFilter !== 'all') {
@@ -162,7 +146,8 @@ export default function Dashboard() {
       );
     }
 
-    filtered.sort((a, b) => {
+    const sorted = [...filtered];
+    sorted.sort((a, b) => {
       switch (sortBy) {
         case 'name-desc':
           return b.name.localeCompare(a.name);
@@ -179,8 +164,21 @@ export default function Dashboard() {
       }
     });
 
-    setFilteredFiles(filtered);
-  };
+    return sorted;
+  }, [files, searchQuery, typeFilter, categoryFilter, sortBy]);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, authLoading, router]);
+
+  useEffect(() => {
+    fetchFiles();
+    const interval = setInterval(pollProcessingStatus, 3000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const executeUpload = async (fileToUpload: File, allowDuplicate: boolean = false) => {
     setUploading(true);
@@ -195,7 +193,7 @@ export default function Dashboard() {
       setTimeout(() => setUploadStatus(null), 4000);
       setDuplicateModalOpen(false);
       setPendingUploadFile(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Upload failed');
       setUploadStatus(null);
     } finally {
@@ -255,18 +253,29 @@ export default function Dashboard() {
 
       // If clean, proceed directly with upload
       await executeUpload(file, false);
-    } catch (err: any) {
-      if (err?.status === 409 && err?.data?.isDuplicate) {
+    } catch (err: unknown) {
+      const errorObj = err as {
+        status?: number;
+        data?: {
+          isDuplicate?: boolean;
+          confidenceLevel?: 'EXACT' | 'HIGH' | 'MODERATE' | 'NONE';
+          highestScore?: number;
+          duplicates?: DuplicateCandidate[];
+          file?: DuplicateCandidate;
+        };
+        message?: string;
+      };
+      if (errorObj?.status === 409 && errorObj?.data?.isDuplicate) {
         // Authoritative duplicate detected by backend
         setPendingUploadFile(file);
         setDuplicateCheckData({
-          confidenceLevel: err.data.confidenceLevel || 'EXACT',
-          highestScore: err.data.highestScore || 1.0,
-          duplicates: err.data.duplicates || (err.data.file ? [err.data.file] : []),
+          confidenceLevel: errorObj.data.confidenceLevel || 'EXACT',
+          highestScore: errorObj.data.highestScore || 1.0,
+          duplicates: errorObj.data.duplicates || (errorObj.data.file ? [errorObj.data.file] : []),
         });
         setDuplicateModalOpen(true);
       } else {
-        setError(err instanceof Error ? err.message : 'Upload failed');
+        setError(errorObj instanceof Error ? errorObj.message : (errorObj?.message || 'Upload failed'));
       }
       setUploadStatus(null);
       setUploading(false);
@@ -299,16 +308,9 @@ export default function Dashboard() {
     try {
       await apiClient.deleteFile(fileName);
       await fetchFiles();
-    } catch (err) {
+    } catch {
       setError('Delete failed');
     }
-  };
-
-  const handleCopyLink = (file: FileItem) => {
-    const link = file.url?.startsWith("http") ? file.url : apiClient.getFileUrl(file.name);
-    navigator.clipboard.writeText(link);
-    setCopiedFileName(file.name);
-    setTimeout(() => setCopiedFileName(null), 2000);
   };
 
   // Full Page Skeleton Loading state

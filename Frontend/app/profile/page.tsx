@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, FormEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiClient } from '@/lib/api';
 import Link from 'next/link';
@@ -49,14 +49,12 @@ export default function Profile() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [selectedAvatar, setSelectedAvatar] = useState<string>('cyan-blue');
-
-  useEffect(() => {
-    const saved = localStorage.getItem('user_profile_avatar');
-    if (saved) {
-      setSelectedAvatar(saved);
+  const [selectedAvatar, setSelectedAvatar] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('user_profile_avatar') || 'cyan-blue';
     }
-  }, []);
+    return 'cyan-blue';
+  });
 
   const handleSelectAvatar = (avatarId: string) => {
     setSelectedAvatar(avatarId);

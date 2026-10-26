@@ -10,13 +10,11 @@ import {
   CheckCircledIcon,
   ExclamationTriangleIcon,
   MagicWandIcon,
-  BookmarkIcon,
   ChevronDownIcon,
   ChevronUpIcon,
-  MagnifyingGlassIcon,
 } from '@radix-ui/react-icons';
 import { apiClient } from '@/lib/api';
-import { FileItem, Citation, ChatMessage } from '@/types';
+import { FileItem, ChatMessage } from '@/types';
 
 export interface AskVaultMindModalProps {
   isOpen: boolean;
@@ -41,7 +39,15 @@ export function AskVaultMindModal({
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = React.useState('');
   const [conversationId, setConversationId] = React.useState<string>(() => `conv-${Date.now()}`);
-  const [selectedFileId, setSelectedFileId] = React.useState<string>('all');
+  const [selectedFileId, setSelectedFileId] = React.useState<string>(
+    () => initialSelectedFile?._id || initialSelectedFile?.name || 'all'
+  );
+  const [prevInitialFile, setPrevInitialFile] = React.useState(initialSelectedFile);
+  if (initialSelectedFile !== prevInitialFile) {
+    setPrevInitialFile(initialSelectedFile);
+    setSelectedFileId(initialSelectedFile?._id || initialSelectedFile?.name || 'all');
+  }
+
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [expandedCitationIndex, setExpandedCitationIndex] = React.useState<string | null>(null);
@@ -49,17 +55,12 @@ export function AskVaultMindModal({
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  // Initialize or update selected file when modal opens
+  // Focus input when modal opens
   React.useEffect(() => {
     if (isOpen) {
-      if (initialSelectedFile && (initialSelectedFile._id || initialSelectedFile.name)) {
-        setSelectedFileId(initialSelectedFile._id || initialSelectedFile.name);
-      } else {
-        setSelectedFileId('all');
-      }
       setTimeout(() => inputRef.current?.focus(), 150);
     }
-  }, [isOpen, initialSelectedFile]);
+  }, [isOpen]);
 
   // Auto-scroll to bottom of conversation
   React.useEffect(() => {
