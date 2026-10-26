@@ -9,8 +9,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import ThemeToggle from '@/components/ThemeToggle';
 import { FileCard } from '@/components/FileCard';
 import { DuplicateWarningModal, DuplicateCandidate } from '@/components/DuplicateWarningModal';
+import { AskVaultMindModal } from '@/components/AskVaultMindModal';
 import {
   PersonIcon,
+  ChatBubbleIcon,
   MagnifyingGlassIcon,
   UploadIcon,
   FileTextIcon,
@@ -60,6 +62,10 @@ export default function Dashboard() {
     highestScore: 0,
     duplicates: [],
   });
+
+  // Ask VaultMind Chat Modal state (Day 6)
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [selectedChatFile, setSelectedChatFile] = useState<FileItem | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -387,6 +393,17 @@ export default function Dashboard() {
 
           <div className="flex items-center gap-3">
             <ThemeToggle />
+            <button
+              onClick={() => {
+                setSelectedChatFile(null);
+                setIsChatOpen(true);
+              }}
+              className="px-4 py-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white text-sm font-semibold rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-teal-500/20 hover:shadow-teal-500/35 hover:scale-[1.02] active:scale-[0.98]"
+              title="Chat with your documents via AI"
+            >
+              <ChatBubbleIcon className="w-4 h-4 animate-pulse" />
+              <span>Ask VaultMind</span>
+            </button>
             <Link
               href="/photos"
               className="px-4 py-2 bg-card border border-border/80 hover:bg-accent text-foreground text-sm font-medium rounded-xl transition-all flex items-center gap-2 shadow-sm"
@@ -606,6 +623,10 @@ export default function Dashboard() {
                 file={file}
                 isProcessing={processingFiles.has(file._id || '')}
                 onDelete={handleDelete}
+                onChat={(f) => {
+                  setSelectedChatFile(f);
+                  setIsChatOpen(true);
+                }}
               />
             ))
           )}
@@ -624,6 +645,14 @@ export default function Dashboard() {
       onUploadAnyway={handleDuplicateUploadAnyway}
       onRenameAndSave={handleDuplicateRenameAndSave}
       isUploading={uploading}
+    />
+
+    {/* Ask VaultMind Chat Modal (Day 6) */}
+    <AskVaultMindModal
+      isOpen={isChatOpen}
+      onClose={() => setIsChatOpen(false)}
+      files={files}
+      initialSelectedFile={selectedChatFile}
     />
   </ScrollProgressProvider>
 );

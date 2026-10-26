@@ -17,16 +17,18 @@ import {
   SpeakerLoudIcon,
   ArchiveIcon,
   ArrowRightIcon,
+  ChatBubbleIcon,
 } from "@radix-ui/react-icons";
 
 interface FileCardProps extends React.HTMLAttributes<HTMLDivElement> {
   file: FileItem;
   isProcessing?: boolean;
   onDelete: (fileName: string) => void;
+  onChat?: (file: FileItem) => void;
 }
 
 const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
-  ({ className, file, isProcessing = false, onDelete, ...props }, ref) => {
+  ({ className, file, isProcessing = false, onDelete, onChat, ...props }, ref) => {
     const [copied, setCopied] = React.useState(false);
 
     const isImage = React.useMemo(() => {
@@ -241,6 +243,21 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
                     )}
                   </button>
                 </li>
+                {isDocument && onChat && (
+                  <li>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onChat(file);
+                      }}
+                      className="text-primary hover:text-primary font-medium flex items-center gap-2 py-2"
+                    >
+                      <ChatBubbleIcon className="w-3.5 h-3.5" />
+                      <span>Ask VaultMind</span>
+                    </button>
+                  </li>
+                )}
                 <li>
                   <button onClick={handleDelete} className="text-destructive font-semibold flex items-center gap-2 py-2">
                     <TrashIcon className="w-3.5 h-3.5" />

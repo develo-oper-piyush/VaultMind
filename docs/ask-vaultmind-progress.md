@@ -10,8 +10,8 @@
 | **Day 2** | 2026-10-18 | `21ea353` | `feat(vaultmind): add secure document upload` | Completed & Pushed | File validation, 0-byte & 5MB checks, duplicate prevention, chunk cleanup on deletion |
 | **Day 3** | 2026-10-19 | `98a299c` | `feat(vaultmind): implement document extraction and chunking` | Completed & Pushed | Enhanced extraction (PDF, DOCX, TXT), text normalization, sliding-window chunking, page tagging |
 | **Day 4** | 2026-10-20 | `2cb3eda` | `feat(vaultmind): add document indexing and retrieval` | Completed & Pushed | TF-IDF chunk retrieval engine, cosine similarity, keyword/filename boosting, document filtering |
-| **Day 5** | 2026-10-21 | Pending | `feat(vaultmind): add grounded document question answering` | In Progress | Grounded RAG with Gemini, context fencing, citation builder, honest fallback handling |
-| **Day 6** | Scheduled | - | `feat(vaultmind): integrate chat interface and citations` | Scheduled | Ask VaultMind chat UI, evidence citations drawer, history persistence |
+| **Day 5** | 2026-10-21 | `bf493ea` | `feat(vaultmind): add grounded document question answering` | Completed & Pushed | Grounded RAG with Gemini, context fencing, citation builder, honest fallback handling |
+| **Day 6** | 2026-10-26 | `4660588` | `feat(vaultmind): integrate chat interface and citations` | Completed & Pushed | Interactive chat modal, document scope selector, expandable citation evidence drawer, dashboard integration |
 | **Day 7** | Scheduled | - | `test(vaultmind): validate and document document chat workflow` | Scheduled | End-to-end testing, hardening, edge cases, docs finalization |
 
 ---
@@ -55,3 +55,20 @@
   - Source citations generation: maps retrieved chunks to document name, page number, chunk index, similarity score, and excerpt snippet
   - Non-hallucination guarantee: returns empty citations and honest message on insufficient context
   - Endpoints: `POST /chat/ask`, `GET /chat/history`, `POST /chat/clear`, `GET /chat/conversations`
+
+### Day 6 Validation Details
+- **Component**: `Frontend/components/AskVaultMindModal.tsx`
+- **Dashboard & Card Integration**: `Frontend/app/dashboard/page.tsx`, `Frontend/components/FileCard.tsx`
+- **Covered Capabilities**:
+  - Modal with glowing AI header and interactive trigger in dashboard navbar
+  - Per-document quick trigger directly from FileCard action dropdown
+  - Document scope dropdown allowing queries across "All Documents" or scoped to a specific file
+  - Suggested question chips for instant starter queries
+  - Message bubble conversation thread with user and assistant badges
+  - Real-time animated loading skeleton while backend pipeline indexes and generates answers
+  - Expandable evidence citation badges showing document name, page number, match confidence score, and raw excerpt snippet
+  - Reset / New conversation button with server-side history clearing
+  - Responsive layout with scroll-to-bottom auto-scroll behavior
+- **Type Safety**: `npx tsc --noEmit` passed with 0 errors
+- **Backend Test Status**: 36/36 tests passing across all suites (`fileValidator`, `chunkingEngine`, `retrievalEngine`, `askDocumentService`)
+
