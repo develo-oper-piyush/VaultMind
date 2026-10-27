@@ -271,9 +271,13 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
                   </button>
                 </li>
                 <li>
-                  <button onClick={handleDelete} className="text-destructive font-semibold flex items-center gap-2 py-2">
+                  <button
+                    onClick={handleDelete}
+                    className="text-destructive font-semibold flex items-center gap-2 py-2 hover:bg-destructive/10 rounded-lg px-2 transition-colors w-full"
+                    title="Move to Recycle Bin (30-day retention)"
+                  >
                     <TrashIcon className="w-3.5 h-3.5" />
-                    <span>Delete File</span>
+                    <span>Move to Trash</span>
                   </button>
                 </li>
               </ul>

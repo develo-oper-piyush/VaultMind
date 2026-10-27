@@ -650,6 +650,48 @@ While a file resides in the Recycle Bin:
     - Results: 110 passing tests across 37 suites (0 failures, 0 skipped, duration 3.31s).
     - Validated: File models, version service, recycle bin service, migrations, version routes, recycle bin routes, anti-traversal security, and Day 4 backend endpoints completely preserved.
 - **Known Limitations**:
-  - Recycle Bin frontend UI (trash navigation tab, retention countdown badges, bulk empty trash confirmation) is scheduled for Day 6.
-- **Day 6 Planned Tasks**:
-  - Implement Recycle Bin UI & dashboard integration (tab toggle, days remaining countdown, restore conflict dialog, permanent delete confirmation).
+  - None for Day 5.
+- **Day 6 Planned Tasks**: Completed.
+
+### Day 6 — 2026-10-27
+- **Status**: Completed (Recycle Bin UI & Dashboard Integration)
+- **UI Components Created / Modified**:
+  - `Frontend/components/RecycleBinView.tsx`: Created responsive, accessible glassmorphism dark/light Recycle Bin view featuring:
+    - 30-day retention policy notification banner with storage footprint statistics.
+    - Retention countdown pill with dynamic color-coding (`<= 3 days` urgent red, `Expires Today`, default amber/zinc).
+    - Rich metadata display: original filename, file type category icons, human-readable file size, deletion timestamp, auto-purge timestamp, version count badge, original folder location, and AI summary excerpt.
+    - Restore action with active quota (12 files) error handling and non-conflicting renamed file notifications (`(restored)`).
+    - Permanent deletion confirmation modal with irreversible purge warnings highlighting removal of all historical versions.
+    - "Empty Recycle Bin" header action with strong confirmation alert dialog.
+    - Dedicated search & sort filters (deleted newest/oldest, expiring soonest, size, name).
+    - Loading skeletons, empty state with active workspace return shortcut, error banner with retry button.
+    - Per-file loading spinners and duplicate submission prevention (`isActionRunning`).
+  - `Frontend/components/FileCard.tsx`:
+    - Re-labeled delete dropdown action to "Move to Trash" with retention tooltip informing users of the 30-day recovery window.
+  - `Frontend/app/dashboard/page.tsx`:
+    - Added tab navigation between "Active Workspace" (`{files.length}/12`) and "Recycle Bin" (`{trashCount}`).
+    - Added Recycle Bin quick-access button with badge counter in the top header.
+    - Implemented soft-delete handling in `handleDelete` with toast notification and "View in Recycle Bin" shortcut.
+    - Synchronized active file list, trash count, and storage quota dynamically across tabs with memoized callbacks.
+- **API Client & Type Definitions**:
+  - `Frontend/types/index.ts`:
+    - Added strong TypeScript interfaces: `RecycleBinItem`, `RecycleBinResponse`, `RestoreTrashResponse`, `PermanentlyDeleteResponse`, `EmptyRecycleBinResponse`.
+  - `Frontend/lib/api.ts`:
+    - Updated `getRecycleBin`, `restoreFileFromTrash`, `permanentlyDeleteFile`, and `emptyRecycleBin` with strict return types, parameter URI-encoding, and consistent error handling.
+- **Tests Executed & Real Results**:
+  - Frontend Unit Tests:
+    - Command: `npm test` (`node --test tests/**/*.test.mjs`) in `Frontend/`
+    - Suites: `tests/recycleBin.test.mjs` & `tests/versionHistory.api.test.mjs`
+    - Results: 31 passing tests across 12 suites (0 failures, 0 skipped, duration 525ms).
+    - Validated: Trash listing & credentials, file restore & renamed conflict notifications, quota rejection handling, permanent single-file deletion, bulk empty bin purge, countdown & days remaining calculations, search/sort filters, duplicate submission prevention, and preservation of Day 4/5 APIs.
+  - Frontend Production Build & TypeScript:
+    - Command: `npm run build` (`next build`) in `Frontend/`
+    - Results: Compiled successfully in 3.8s, TypeScript type check passed in 6.0s, all 9 static routes generated with 0 errors.
+  - Backend Tests:
+    - Command: `npm test` (`node --test tests/**/*.test.js`) in `Backend/`
+    - Results: 110 passing tests across 37 suites (0 failures, 0 skipped, duration 3.6s).
+    - Validated: Backend models, services, migrations, version routes, recycle bin routes, storage cascading, quota constraints, and active endpoint filtering.
+- **Known Limitations**:
+  - Comprehensive end-to-end multi-user integration tests and final hardening will be completed in Day 7.
+- **Day 7 Planned Tasks**:
+  - Implement comprehensive testing, security review, bug fixes, final documentation, and end-to-end validation.

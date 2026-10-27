@@ -2,6 +2,10 @@ import type {
   FileVersionsResponse,
   RestoreVersionResponse,
   UploadVersionResponse,
+  RecycleBinResponse,
+  RestoreTrashResponse,
+  PermanentlyDeleteResponse,
+  EmptyRecycleBinResponse,
 } from '@/types';
 
 // API Configuration
@@ -140,30 +144,30 @@ class ApiClient {
   }
 
   // Recycle Bin Endpoints
-  async getRecycleBin() {
-    return this.request('/files/recycle-bin');
+  async getRecycleBin(): Promise<RecycleBinResponse> {
+    return this.request<RecycleBinResponse>('/files/recycle-bin');
   }
 
-  async restoreFileFromTrash(fileId: string) {
-    return this.request(`/files/recycle-bin/${fileId}/restore`, {
+  async restoreFileFromTrash(fileId: string): Promise<RestoreTrashResponse> {
+    return this.request<RestoreTrashResponse>(`/files/recycle-bin/${encodeURIComponent(fileId)}/restore`, {
       method: 'POST',
     });
   }
 
-  async permanentlyDeleteFile(fileId: string) {
-    return this.request(`/files/recycle-bin/${fileId}`, {
+  async permanentlyDeleteFile(fileId: string): Promise<PermanentlyDeleteResponse> {
+    return this.request<PermanentlyDeleteResponse>(`/files/recycle-bin/${encodeURIComponent(fileId)}`, {
       method: 'DELETE',
     });
   }
 
-  async emptyRecycleBin() {
-    return this.request('/files/recycle-bin/empty', {
+  async emptyRecycleBin(): Promise<EmptyRecycleBinResponse> {
+    return this.request<EmptyRecycleBinResponse>('/files/recycle-bin/empty', {
       method: 'DELETE',
     });
   }
 
   async trashFile(fileId: string) {
-    return this.request(`/files/${fileId}/trash`, {
+    return this.request(`/files/${encodeURIComponent(fileId)}/trash`, {
       method: 'POST',
     });
   }
