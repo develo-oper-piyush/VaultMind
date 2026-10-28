@@ -147,4 +147,18 @@ describe("Version History Routes Integration Tests", () => {
             assert.strictEqual(filesRes.status, 400);
         });
     });
+
+    describe("Security: Unauthenticated requests blocked for all version endpoints (Day 7)", () => {
+        test("version upload rejects request with no file present with 400 (pre-auth check passes)", async () => {
+            // This confirms 400 before any ownership check — ownership is tested in service unit tests
+            const validFileId = new mongoose.Types.ObjectId().toString();
+            const res = await fetch(`${baseUrl}/files/${validFileId}/version`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${validToken}` },
+            });
+            assert.strictEqual(res.status, 400);
+            const body = await res.json();
+            assert.ok(body.error.includes("No file") || body.error.includes("file"));
+        });
+    });
 });

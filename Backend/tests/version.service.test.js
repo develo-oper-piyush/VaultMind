@@ -799,3 +799,188 @@ describe("Version Service Unit Tests", () => {
         });
     });
 });
+
+// ====================================================================
+// Day 7 Security Regression Tests
+// ====================================================================
+describe("Day 7 Security Regression: Cross-User Isolation", () => {
+    describe("listVersionsForFile — ownership enforcement", () => {
+        test("returns 404 when fileId belongs to a different user", async () => {
+            const fileId = new mongoose.Types.ObjectId();
+            const ownerUserId = "owner_u1";
+            const attackerUserId = "attacker_u2";
+
+            // File exists for owner, but findOne with attacker userId returns null
+            const mockFile = {
+                findOne: (filter) => ({
+                    lean: async () => {
+                        if (String(filter.userId) === ownerUserId) {
+                            return { _id: fileId, userId: ownerUserId, currentVersion: 1 };
+                        }
+                        return null;
+                    },
+                }),
+            };
+            const MockFileVersion = createMockFileVersionModel([]);
+
+            await assert.rejects(
+                () => listVersionsForFile(fileId.toString(), attackerUserId, {
+                    File: mockFile,
+                    FileVersion: MockFileVersion,
+                }),
+                (err) => {
+                    assert.strictEqual(err.status, 404);
+                    assert.ok(err.message.includes("not found"));
+                    return true;
+                }
+            );
+        });
+    });
+
+    describe("downloadHistoricalVersion — ownership enforcement", () => {
+        test("returns 404 when file belongs to a different user", async () => {
+            const fileId = new mongoose.Types.ObjectId();
+            const versionId = new mongoose.Types.ObjectId();
+            const ownerUserId = "owner_u1";
+            const attackerUserId = "attacker_u2";
+
+            const mockFile = {
+                findOne: (filter) => ({
+                    lean: async () => {
+                        if (String(filter.userId) === ownerUserId) {
+                            return { _id: fileId, userId: ownerUserId };
+                        }
+                        return null;
+                    },
+                }),
+            };
+            const MockFileVersion = createMockFileVersionModel([]);
+
+            await assert.rejects(
+                () => downloadHistoricalVersion(fileId.toString(), versionId.toString(), attackerUserId, {
+                    File: mockFile,
+                    FileVersion: MockFileVersion,
+                    supabase: {},
+                }),
+                (err) => {
+                    assert.strictEqual(err.status, 404);
+                    return true;
+                }
+            );
+        });
+
+        test("returns 403 when version storagePath crosses user boundary", async () => {
+            const fileId = new mongoose.Types.ObjectId();
+            const versionId = new mongoose.Types.ObjectId();
+            const userId = "u1";
+
+            const mockFileDoc = { _id: fileId, userId };
+            const mockVersionDoc = {
+                _id: versionId,
+                fileId,
+                userId,
+                storagePath: "other_user/versions/something/v1_file.pdf", // wrong namespace
+                mimetype: "application/pdf",
+                size: 1024,
+                originalName: "file.pdf",
+            };
+
+            const mockFile = {
+                findOne: () => ({
+                    lean: async () => mockFileDoc,
+                }),
+            };
+            const MockFileVersion = {
+                findOne: () => ({
+                    lean: async () => mockVersionDoc,
+                }),
+            };
+
+            await assert.rejects(
+                () => downloadHistoricalVersion(fileId.toString(), versionId.toString(), userId, {
+                    File: mockFile,
+                    FileVersion: MockFileVersion,
+                    supabase: {},
+                }),
+                (err) => {
+                    assert.strictEqual(err.status, 403);
+                    assert.ok(err.message.includes("boundary") || err.message.includes("path"));
+                    return true;
+                }
+            );
+        });
+    });
+
+    describe("uploadFileVersion — rejects soft-deleted file", () => {
+        test("returns 400 when target file is in Recycle Bin", async () => {
+            const fileId = new mongoose.Types.ObjectId();
+            const userId = "u1";
+
+            const trashedFile = {
+                _id: fileId,
+                userId,
+                isDeleted: true,
+                currentVersion: 2,
+            };
+
+            const mockFile = {
+                findOne: async () => trashedFile,
+            };
+            const MockFileVersion = createMockFileVersionModel([]);
+
+            await assert.rejects(
+                () => uploadFileVersion({
+                    fileId: fileId.toString(),
+                    userId,
+                    file: { name: "doc.pdf", data: Buffer.from("test"), mimetype: "application/pdf", size: 4 },
+                }, {
+                    File: mockFile,
+                    FileVersion: MockFileVersion,
+                    supabase: {},
+                }),
+                (err) => {
+                    assert.strictEqual(err.status, 400);
+                    assert.ok(err.message.includes("Recycle Bin"));
+                    return true;
+                }
+            );
+        });
+    });
+
+    describe("restoreFileVersion — rejects soft-deleted file", () => {
+        test("returns 400 when parent file is in Recycle Bin", async () => {
+            const fileId = new mongoose.Types.ObjectId();
+            const versionId = new mongoose.Types.ObjectId();
+            const userId = "u1";
+
+            const trashedFile = {
+                _id: fileId,
+                userId,
+                isDeleted: true,
+                currentVersion: 1,
+            };
+
+            const mockFile = {
+                findOne: async () => trashedFile,
+            };
+            const MockFileVersion = createMockFileVersionModel([]);
+
+            await assert.rejects(
+                () => restoreFileVersion({
+                    fileId: fileId.toString(),
+                    versionId: versionId.toString(),
+                    userId,
+                }, {
+                    File: mockFile,
+                    FileVersion: MockFileVersion,
+                    supabase: {},
+                }),
+                (err) => {
+                    assert.strictEqual(err.status, 400);
+                    assert.ok(err.message.includes("Recycle Bin"));
+                    return true;
+                }
+            );
+        });
+    });
+});

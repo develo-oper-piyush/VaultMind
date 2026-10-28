@@ -13,6 +13,7 @@ describe("Recycle Bin Routes Integration Tests", () => {
     let baseUrl;
     const testSecret = "test-recycle-bin-jwt-secret-key-12345";
     const testUserId = "user_rb_integration_test";
+    let validToken;
     let originalFind;
     let originalDeleteMany;
 
@@ -227,6 +228,31 @@ describe("Recycle Bin Routes Integration Tests", () => {
                 headers: { Authorization: `Bearer ${validToken}` },
             });
             assert.strictEqual(res2.status, 400);
+        });
+    });
+
+    describe("Security: Input validation confirms no ID leak (Day 7)", () => {
+        test("all recycle bin write endpoints reject malformed IDs before reaching DB", async () => {
+            // All these reject at the validation layer before any ownership check or DB call
+            const malformed = "not-a-valid-id";
+
+            const restoreRes = await fetch(`${baseUrl}/files/recycle-bin/${malformed}/restore`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${validToken}` },
+            });
+            assert.strictEqual(restoreRes.status, 400);
+
+            const deleteRes = await fetch(`${baseUrl}/files/recycle-bin/${malformed}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${validToken}` },
+            });
+            assert.strictEqual(deleteRes.status, 400);
+
+            const trashRes = await fetch(`${baseUrl}/files/${malformed}/trash`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${validToken}` },
+            });
+            assert.strictEqual(trashRes.status, 400);
         });
     });
 });
