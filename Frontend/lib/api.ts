@@ -1,4 +1,6 @@
 import type {
+  Citation,
+  ChatMessage,
   FileVersionsResponse,
   RestoreVersionResponse,
   UploadVersionResponse,
@@ -38,23 +40,23 @@ class ApiClient {
       const response = await fetch(url, config);
       const contentType = response.headers.get('content-type');
 
-      let data: any;
+      let data: Record<string, unknown> = {};
       if (contentType && contentType.includes('application/json')) {
-        data = await response.json();
+        data = (await response.json()) as Record<string, unknown>;
       } else {
         if (!response.ok) {
           throw new Error(`Backend server error (HTTP ${response.status}). Please check backend API server.`);
         }
         const text = await response.text();
         try {
-          data = JSON.parse(text);
+          data = JSON.parse(text) as Record<string, unknown>;
         } catch {
           data = { message: text };
         }
       }
 
       if (!response.ok) {
-        throw new Error(data.error || data.message || `Request failed with status ${response.status}`);
+        throw new Error((data.error as string) || (data.message as string) || `Request failed with status ${response.status}`);
       }
 
       return data as T;
@@ -103,15 +105,84 @@ class ApiClient {
     return this.request('/files/home');
   }
 
-  async uploadFile(file: File) {
+  async uploadFile(file: File, allowDuplicate: boolean = false) {
     const formData = new FormData();
     formData.append('file', file);
+    if (allowDuplicate) {
+      formData.append('allowDuplicate', 'true');
+    }
 
-    return fetch(`${this.baseURL}/files/upload-file`, {
+    const response = await fetch(`${this.baseURL}/files/upload-file`, {
       method: 'POST',
       body: formData,
       credentials: 'include',
-    }).then(res => res.json());
+    });
+
+    const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!response.ok) {
+      const error = new Error(((data.error as string) || (data.message as string) || `Upload failed with status ${response.status}`)) as Error & { status?: number; data?: unknown };
+      error.status = response.status;
+      error.data = data;
+      throw error;
+    }
+    return data;
+  }
+
+  async checkDuplicate(payload: {
+    originalName: string;
+    size: number;
+    mimetype?: string;
+    category?: string;
+    excludeFileId?: string;
+  }) {
+    return this.request<{
+      success: boolean;
+      isDuplicate: boolean;
+      confidenceLevel: 'EXACT' | 'HIGH' | 'MODERATE' | 'NONE';
+      highestScore: number;
+      duplicates: Array<{
+        fileId: string;
+        fileName: string;
+        originalName: string;
+        size: number;
+        mimetype: string;
+        category?: string;
+        createdAt?: string;
+        similarityScore: number;
+        confidenceLevel: string;
+        reasons: string[];
+      }>;
+      message: string;
+    }>('/files/check-duplicate', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async scanDuplicates() {
+    return this.request<{
+      success: boolean;
+      fileCount: number;
+      duplicateGroupCount: number;
+      duplicateGroups: Array<{
+        primaryFile: Record<string, unknown>;
+        duplicates: Array<Record<string, unknown>>;
+        redundantCount: number;
+        wastedBytes: number;
+        formattedWastedBytes: string;
+      }>;
+      totalWastedBytes: number;
+      formattedWastedBytes: string;
+    }>('/files/duplicates');
+  }
+
+  async getSupportedFormats() {
+    return this.request<{
+      success: boolean;
+      supportedDocumentExtensions: string[];
+      maxFileSizeMB: number;
+      maxFilesPerUser: number;
+    }>('/files/supported-formats');
   }
 
   async deleteFile(fileName: string) {
@@ -286,7 +357,7 @@ class ApiClient {
   }) {
     return this.request<{
       answer: string;
-      citations: any[];
+      citations: Citation[];
       conversationId: string;
       retrievedChunksCount: number;
       grounded: boolean;
@@ -299,7 +370,7 @@ class ApiClient {
   async getChatHistory(conversationId?: string) {
     const query = conversationId ? `?conversationId=${encodeURIComponent(conversationId)}` : '';
     return this.request<{
-      messages: any[];
+      messages: ChatMessage[];
       conversationId: string;
     }>(`/chat/history${query}`);
   }
@@ -316,9 +387,39 @@ class ApiClient {
 
   async getDocumentChunks(fileId: string) {
     return this.request<{
-      chunks: any[];
+      chunks: Array<Record<string, unknown>>;
       totalChunks: number;
     }>(`/files/chunks/${fileId}`);
+  }
+
+  async retrieveChunks(payload: {
+    query: string;
+    fileFilters?: string[];
+    topK?: number;
+    minScore?: number;
+  }) {
+    return this.request<{
+      success: boolean;
+      query: string;
+      totalFound: number;
+      sufficientContext: boolean;
+      chunks: Array<Record<string, unknown>>;
+    }>('/files/retrieve', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getConversations() {
+    return this.request<{
+      success: boolean;
+      conversations: Array<{
+        conversationId: string;
+        lastMessage: string;
+        updatedAt: string;
+        messageCount: number;
+      }>;
+    }>('/chat/conversations');
   }
 }
 

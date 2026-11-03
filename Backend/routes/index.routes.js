@@ -2,13 +2,24 @@ const express = require("express");
 const supabase = require("../config/supabase");
 const authMiddleware = require("../middlewares/auth.middleware");
 const File = require("../models/file.model");
+const DocumentChunk = require("../models/documentChunk.model");
 const {
+    extractDocument,
     extractTextFromBuffer,
     extractKeywords,
 } = require("../utils/textExtractor");
+const { chunkDocument } = require("../utils/chunkingEngine");
+const ragConfig = require("../config/ragConfig");
 const { generateTagsAndCategory } = require("../utils/aiTagger");
 const { generateSummary } = require("../utils/aiSummarizer");
 const { searchFiles } = require("../utils/searchEngine");
+const {
+    validateUploadFile,
+    MAX_FILE_SIZE,
+    SUPPORTED_DOCUMENT_EXTENSIONS,
+} = require("../utils/fileValidator");
+const { retrieveRelevantChunks } = require("../utils/retrievalEngine");
+const { duplicateService } = require("../utils/duplicateService");
 const {
     computeContentHash,
     createFileVersionRecord,
@@ -33,7 +44,6 @@ const router = express.Router();
 
 // Constants for limits
 const MAX_FILES_PER_USER = 12;
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
 
 router.get("/", (req, res) => {
     res.json({ message: "API is running. Please use the frontend application." });
@@ -64,7 +74,7 @@ router.get("/home", authMiddleware, async (req, res) => {
             });
         }
 
-        // Filter out .emptyFolderPlaceholder and version directories
+        // Filter out the .emptyFolderPlaceholder and version directories
         const actualFiles = files.filter(
             (file) => file.name !== ".emptyFolderPlaceholder" && file.name !== "versions"
         );
@@ -91,23 +101,27 @@ router.get("/home", authMiddleware, async (req, res) => {
             const meta = metadataMap[file.name] || {};
             return {
                 name: file.name,
+                originalName: meta.originalName || file.name,
                 fullPath: `${userId}/${file.name}`,
                 url: `${baseUrl}/files/secure-file/${encodeURIComponent(file.name)}`,
                 createdAt: file.created_at,
                 size: file.metadata?.size || meta.size || 0,
                 mimetype: file.metadata?.mimetype || meta.mimetype || "unknown",
+                chunkCount: meta.chunkCount || 0,
                 tags: meta.tags || [],
                 category: meta.category || "Other",
                 summary: meta.summary || null,
                 processingStatus: meta.processingStatus || {
                     textExtracted: false,
+                    chunked: false,
+                    indexed: false,
                     tagged: false,
                     summarized: false,
+                    error: null,
                 },
                 _id: meta._id || null,
                 currentVersion: meta.currentVersion || 1,
                 totalVersions: meta.totalVersions || 1,
-                originalName: meta.originalName || file.name,
             };
         });
 
@@ -134,34 +148,85 @@ router.get("/home", authMiddleware, async (req, res) => {
     }
 });
 
-// Background AI processing function
+// Background document processing: Text Extraction, Chunking & AI Analysis
 const processFileInBackground = async (fileDoc, fileBuffer) => {
     try {
         console.log(`Starting background processing for file: ${fileDoc.fileName}`);
 
-        // Extract text content
-        const textContent = await extractTextFromBuffer(
+        // 1. Extract clean text and per-page metadata
+        const extraction = await extractDocument(
             fileBuffer,
-            fileDoc.mimetype
+            fileDoc.mimetype,
+            fileDoc.originalName
         );
+
+        if (!extraction.success || !extraction.text) {
+            console.warn(`Text extraction note for ${fileDoc.fileName}:`, extraction.error);
+            await File.findByIdAndUpdate(fileDoc._id, {
+                "processingStatus.textExtracted": false,
+                "processingStatus.chunked": false,
+                "processingStatus.indexed": false,
+                "processingStatus.error": extraction.error || "No readable text content found.",
+                updatedAt: Date.now(),
+            });
+            return;
+        }
+
+        const textContent = extraction.text;
         const keywords = extractKeywords(textContent);
 
+        // 2. Generate sliding-window overlapping chunks with page metadata
+        const chunks = chunkDocument(extraction, {
+            chunkSize: ragConfig.CHUNK_SIZE,
+            chunkOverlap: ragConfig.CHUNK_OVERLAP,
+        });
+
+        // 3. Persist document chunks to MongoDB (idempotent: purge previous chunks if any)
+        await DocumentChunk.deleteMany({ fileId: fileDoc._id });
+
+        if (chunks.length > 0) {
+            const chunkDocs = chunks.map((c) => ({
+                userId: fileDoc.userId,
+                fileId: fileDoc._id,
+                fileName: fileDoc.fileName,
+                originalName: fileDoc.originalName,
+                chunkIndex: c.chunkIndex,
+                text: c.text,
+                pageNumber: c.pageNumber,
+                charStart: c.charStart,
+                charEnd: c.charEnd,
+                keywords: extractKeywords(c.text),
+                metadata: {
+                    mimetype: fileDoc.mimetype,
+                    size: fileDoc.size,
+                    totalPages: extraction.pageCount,
+                },
+            }));
+
+            await DocumentChunk.insertMany(chunkDocs);
+            console.log(`Successfully stored ${chunkDocs.length} chunks for ${fileDoc.fileName}`);
+        }
+
+        // 4. Update file with extracted content and chunking status
         await File.findByIdAndUpdate(fileDoc._id, {
             textContent,
             keywords,
+            chunkCount: chunks.length,
             "processingStatus.textExtracted": true,
+            "processingStatus.chunked": true,
+            "processingStatus.indexed": true,
             updatedAt: Date.now(),
         });
 
-        console.log(`Text extracted for file: ${fileDoc.fileName}`);
+        console.log(`Text extracted and indexed for file: ${fileDoc.fileName}`);
 
-        // Run AI tagging and summarization in parallel
+        // 5. Run AI tagging and summarization in parallel
         const [taggingResult, summary] = await Promise.all([
             generateTagsAndCategory(fileDoc.originalName, fileDoc.mimetype, textContent),
             generateSummary(textContent),
         ]);
 
-        // Update with AI results
+        // 6. Update with final AI results
         await File.findByIdAndUpdate(fileDoc._id, {
             tags: taggingResult.tags || [],
             category: taggingResult.category || "Other",
@@ -172,9 +237,9 @@ const processFileInBackground = async (fileDoc, fileBuffer) => {
             updatedAt: Date.now(),
         });
 
-        console.log(`AI processing completed for file: ${fileDoc.fileName}`);
+        console.log(`Document processing completed successfully for: ${fileDoc.fileName}`);
     } catch (error) {
-        console.error(`Background processing error for ${fileDoc.fileName}:`, error);
+        console.error(`Background document processing error for ${fileDoc.fileName}:`, error);
         await File.findByIdAndUpdate(fileDoc._id, {
             "processingStatus.error": error.message,
             updatedAt: Date.now(),
@@ -186,33 +251,51 @@ const processFileInBackground = async (fileDoc, fileBuffer) => {
 router.post("/upload-file", authMiddleware, async (req, res) => {
     try {
         if (!req.files || !req.files.file) {
-            return res.status(400).send("No file uploaded");
+            return res.status(400).json({
+                success: false,
+                error: "No file uploaded. Please select a valid document or file.",
+            });
         }
 
         const file = req.files.file;
         const userId = req.user.userId;
 
-        // Check file size limit (5MB)
-        if (file.size > MAX_FILE_SIZE) {
-            return res
-                .status(400)
-                .send(
-                    `File size exceeds limit of ${
-                        MAX_FILE_SIZE / (1024 * 1024)
-                    }MB`
-                );
+        // Perform rigorous file validation (size, MIME, extension, empty buffer, path traversal)
+        const validation = validateUploadFile(file);
+        if (!validation.valid) {
+            return res.status(400).json({
+                success: false,
+                error: validation.error,
+            });
         }
 
-        // Check current active file count (excluding soft-deleted items)
+        // Check current active file count (excluding soft-deleted items in Recycle Bin)
         const activeFileCount = await countActiveUserFiles(userId);
 
         if (activeFileCount >= MAX_FILES_PER_USER) {
-            return res
-                .status(400)
-                .send(`Maximum file limit of ${MAX_FILES_PER_USER} reached`);
+            return res.status(400).json({
+                success: false,
+                error: `Maximum file limit of ${MAX_FILES_PER_USER} reached. Please delete an older file to upload a new one.`,
+            });
         }
 
-        const fileName = `${Date.now()}-${file.name}`;
+        // Authoritative duplicate detection check against existing user files
+        const uploadCheck = await duplicateService.validateUpload(
+            userId,
+            {
+                name: validation.sanitizedName,
+                originalName: validation.sanitizedName,
+                size: file.size,
+                mimetype: file.mimetype,
+            },
+            req.body?.allowDuplicate
+        );
+
+        if (!uploadCheck.allowed) {
+            return res.status(409).json(uploadCheck);
+        }
+
+        const fileName = `${Date.now()}-${validation.sanitizedName}`;
         const filePath = `${userId}/${fileName}`; // Store in user-specific folder
 
         // Upload to Supabase storage
@@ -225,19 +308,24 @@ router.post("/upload-file", authMiddleware, async (req, res) => {
 
         if (error) {
             console.error("Supabase upload error:", error);
-            return res.status(500).send("Error uploading file");
+            return res.status(500).json({
+                success: false,
+                error: "Error uploading file to storage provider.",
+            });
         }
 
         // Create MongoDB document with initial metadata
         const fileDoc = await File.create({
             userId,
             fileName,
-            originalName: file.name,
+            originalName: validation.sanitizedName,
             supabasePath: filePath,
             mimetype: file.mimetype,
             size: file.size,
             processingStatus: {
                 textExtracted: false,
+                chunked: false,
+                indexed: false,
                 tagged: false,
                 summarized: false,
                 error: null,
@@ -251,7 +339,7 @@ router.post("/upload-file", authMiddleware, async (req, res) => {
                 fileId: fileDoc._id,
                 userId,
                 versionNumber: 1,
-                originalName: file.name,
+                originalName: validation.sanitizedName,
                 storagePath: filePath,
                 mimetype: file.mimetype,
                 size: file.size,
@@ -270,14 +358,19 @@ router.post("/upload-file", authMiddleware, async (req, res) => {
             console.error("Background processing failed:", err);
         });
 
-        res.json({
+        res.status(201).json({
             success: true,
-            message: "File uploaded successfully",
+            message: "File uploaded successfully and queued for processing",
             file: fileDoc,
+            isDocument: validation.isDocument,
+            duplicateWarning: uploadCheck.warning || null,
         });
     } catch (error) {
         console.error("Upload error:", error);
-        res.status(500).send("Server error");
+        res.status(500).json({
+            success: false,
+            error: "An unexpected server error occurred during upload.",
+        });
     }
 });
 
@@ -551,7 +644,7 @@ router.post("/search", authMiddleware, async (req, res) => {
             return res.json({ results: [] });
         }
 
-        // Perform semantic search
+        // Perform semantic search (excludes soft-deleted files)
         const results = await searchFiles(userId, query.trim());
 
         // Fetch Supabase metadata for URLs
@@ -584,29 +677,187 @@ router.get(["/file-status/:fileId", "/api/file-status/:fileId"], authMiddleware,
         const { fileId } = req.params;
         const userId = req.user.userId;
 
-        if (!isValidObjectId(fileId)) {
-            return res.status(400).json({ error: "Invalid file ID format" });
+        const mongoose = require("mongoose");
+        let query = { userId, isDeleted: { $ne: true } };
+        if (mongoose.Types.ObjectId.isValid(fileId)) {
+            query._id = fileId;
+        } else {
+            query.fileName = fileId;
         }
 
-        const file = await File.findOne({ _id: fileId, userId, isDeleted: { $ne: true } }).lean();
+        const file = await File.findOne(query).lean();
 
         if (!file) {
-            return res.status(404).json({ error: "File not found" });
+            return res.status(404).json({ success: false, error: "File not found" });
         }
 
         res.json({
+            success: true,
             _id: file._id,
             fileName: file.fileName,
-            processingStatus: file.processingStatus,
-            tags: file.tags,
-            category: file.category,
-            summary: file.summary,
+            originalName: file.originalName || file.fileName,
+            mimetype: file.mimetype,
+            size: file.size,
+            chunkCount: file.chunkCount || 0,
+            processingStatus: file.processingStatus || {
+                textExtracted: false,
+                chunked: false,
+                indexed: false,
+                tagged: false,
+                summarized: false,
+                error: null,
+            },
+            tags: file.tags || [],
+            category: file.category || "Other",
+            summary: file.summary || null,
+            updatedAt: file.updatedAt,
         });
     } catch (error) {
         console.error("File status error:", error);
-        res.status(500).json({ error: "Failed to fetch file status" });
+        res.status(500).json({ success: false, error: "Failed to fetch file status" });
     }
 });
+
+// Supported formats and upload constraints endpoint
+router.get(["/supported-formats", "/api/supported-formats"], (req, res) => {
+    res.json({
+        success: true,
+        supportedDocumentExtensions: SUPPORTED_DOCUMENT_EXTENSIONS,
+        maxFileSizeMB: MAX_FILE_SIZE / (1024 * 1024),
+        maxFilesPerUser: MAX_FILES_PER_USER,
+    });
+});
+
+// Chunks route for inspecting indexed document chunks
+router.get(["/chunks/:fileId", "/api/files/chunks/:fileId"], authMiddleware, async (req, res) => {
+    try {
+        const { fileId } = req.params;
+        const userId = req.user.userId;
+
+        const mongoose = require("mongoose");
+        let query = { userId };
+        if (mongoose.Types.ObjectId.isValid(fileId)) {
+            query.fileId = fileId;
+        } else {
+            query.fileName = fileId;
+        }
+
+        const chunks = await DocumentChunk.find(query).sort({ chunkIndex: 1 }).lean();
+
+        res.json({
+            success: true,
+            fileId,
+            totalChunks: chunks.length,
+            chunks,
+        });
+    } catch (error) {
+        console.error("Fetch chunks error:", error);
+        res.status(500).json({ success: false, error: "Failed to fetch document chunks" });
+    }
+});
+
+// Retrieve relevant document chunks endpoint (RAG Phase 1 / Semantic search)
+router.post(["/retrieve", "/api/files/retrieve", "/api/chat/retrieve"], authMiddleware, async (req, res) => {
+    try {
+        const { query, fileFilters, topK, minScore } = req.body;
+        const userId = req.user.userId;
+
+        if (!query || query.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: "Search query is required.",
+            });
+        }
+
+        const retrievalResult = await retrieveRelevantChunks(userId, query.trim(), {
+            fileFilters: Array.isArray(fileFilters) ? fileFilters : undefined,
+            topK: topK ? parseInt(topK, 10) : undefined,
+            minScore: minScore !== undefined ? parseFloat(minScore) : undefined,
+        });
+
+        res.json({
+            success: true,
+            query: retrievalResult.query,
+            totalFound: retrievalResult.totalFound,
+            sufficientContext: retrievalResult.sufficientContext,
+            chunks: retrievalResult.chunks,
+        });
+    } catch (error) {
+        console.error("Retrieval endpoint error:", error);
+        res.status(500).json({
+            success: false,
+            error: "Failed to retrieve relevant document chunks.",
+        });
+    }
+});
+
+/**
+ * Smart Duplicate Detection Endpoints (Day 4)
+ */
+
+// Pre-screening duplicate checking endpoint for upload & rename workflows
+router.post(
+    ["/check-duplicate", "/api/files/check-duplicate"],
+    authMiddleware,
+    async (req, res) => {
+        try {
+            const { originalName, size, mimetype, category, excludeFileId } = req.body;
+            const userId = req.user.userId;
+
+            if (!originalName || typeof originalName !== "string" || originalName.trim().length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: "originalName is required and must be a non-empty string.",
+                });
+            }
+
+            if (size === undefined || size === null || isNaN(Number(size)) || Number(size) < 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: "size is required and must be a non-negative number in bytes.",
+                });
+            }
+
+            const checkResult = await duplicateService.checkDuplicates(
+                userId,
+                {
+                    originalName: originalName.trim(),
+                    size: Number(size),
+                    mimetype: mimetype || null,
+                    category: category || null,
+                },
+                { excludeFileId }
+            );
+
+            return res.json(checkResult);
+        } catch (error) {
+            console.error("Check duplicate error:", error);
+            return res.status(500).json({
+                success: false,
+                error: "Internal server error checking file duplicates.",
+            });
+        }
+    }
+);
+
+// Audit user storage vault for duplicate clusters and recoverable quota
+router.get(
+    ["/duplicates", "/api/files/duplicates"],
+    authMiddleware,
+    async (req, res) => {
+        try {
+            const userId = req.user.userId;
+            const auditResult = await duplicateService.scanUserVault(userId);
+            return res.json(auditResult);
+        } catch (error) {
+            console.error("Audit duplicates error:", error);
+            return res.status(500).json({
+                success: false,
+                error: "Failed to audit user storage vault for duplicates.",
+            });
+        }
+    }
+);
 
 // ==========================================
 // File Version History Endpoints (Day 3)

@@ -5,7 +5,6 @@ import { cn } from "@/lib/utils";
 import { FileItem } from "@/types";
 import { apiClient } from "@/lib/api";
 import {
-  ExternalLinkIcon,
   DotsVerticalIcon,
   CopyIcon,
   CheckIcon,
@@ -18,17 +17,19 @@ import {
   ArchiveIcon,
   ArrowRightIcon,
   CounterClockwiseClockIcon,
+  ChatBubbleIcon,
 } from "@radix-ui/react-icons";
 
 interface FileCardProps extends React.HTMLAttributes<HTMLDivElement> {
   file: FileItem;
   isProcessing?: boolean;
   onDelete: (fileName: string) => void;
+  onChat?: (file: FileItem) => void;
   onOpenVersionHistory?: (file: FileItem) => void;
 }
 
 const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
-  ({ className, file, isProcessing = false, onDelete, onOpenVersionHistory, ...props }, ref) => {
+  ({ className, file, isProcessing = false, onDelete, onChat, onOpenVersionHistory, ...props }, ref) => {
     const [copied, setCopied] = React.useState(false);
 
     const isImage = React.useMemo(() => {
@@ -179,13 +180,20 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
               </div>
             </div>
 
-            {/* File Name */}
-            <h3
-              className="text-xl font-bold tracking-tight text-white drop-shadow-md truncate mb-2 group-hover:text-white transition-colors"
-              title={file.name}
-            >
-              {file.name}
-            </h3>
+            {/* File Name & Document Status Badge */}
+            <div className="flex items-center gap-2 mb-2">
+              <h3
+                className="text-xl font-bold tracking-tight text-white drop-shadow-md truncate group-hover:text-white transition-colors flex-1"
+                title={file.originalName || file.name}
+              >
+                {file.originalName || file.name}
+              </h3>
+              {isDocument && (
+                <span className="text-[10px] bg-blue-500/25 border border-blue-400/40 text-blue-200 px-2 py-0.5 rounded-full font-semibold flex-shrink-0">
+                  {file.chunkCount ? `${file.chunkCount} chunks` : 'Document'}
+                </span>
+              )}
+            </div>
 
             {/* Tags */}
             {file.tags && file.tags.length > 0 && (
@@ -270,6 +278,21 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
                     )}
                   </button>
                 </li>
+                {isDocument && onChat && (
+                  <li>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onChat(file);
+                      }}
+                      className="text-primary hover:text-primary font-medium flex items-center gap-2 py-2"
+                    >
+                      <ChatBubbleIcon className="w-3.5 h-3.5" />
+                      <span>Ask VaultMind</span>
+                    </button>
+                  </li>
+                )}
                 <li>
                   <button
                     onClick={handleDelete}

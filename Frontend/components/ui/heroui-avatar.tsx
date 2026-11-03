@@ -73,8 +73,7 @@ function AvatarRoot({
   );
 }
 
-interface AvatarImageProps
-  extends React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image> {}
+type AvatarImageProps = React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>;
 
 function AvatarImage({ className, ...props }: AvatarImageProps) {
   return (
