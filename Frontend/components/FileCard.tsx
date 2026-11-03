@@ -16,6 +16,7 @@ import {
   SpeakerLoudIcon,
   ArchiveIcon,
   ArrowRightIcon,
+  CounterClockwiseClockIcon,
   ChatBubbleIcon,
 } from "@radix-ui/react-icons";
 
@@ -24,10 +25,11 @@ interface FileCardProps extends React.HTMLAttributes<HTMLDivElement> {
   isProcessing?: boolean;
   onDelete: (fileName: string) => void;
   onChat?: (file: FileItem) => void;
+  onOpenVersionHistory?: (file: FileItem) => void;
 }
 
 const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
-  ({ className, file, isProcessing = false, onDelete, onChat, ...props }, ref) => {
+  ({ className, file, isProcessing = false, onDelete, onChat, onOpenVersionHistory, ...props }, ref) => {
     const [copied, setCopied] = React.useState(false);
 
     const isImage = React.useMemo(() => {
@@ -153,11 +155,29 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
                 )}
               </div>
 
-              {file.category && file.category !== "Other" && (
-                <span className="text-[11px] bg-[hsl(var(--theme-color)/0.4)] backdrop-blur-md text-white border border-white/20 px-2.5 py-1 rounded-full font-semibold">
-                  {file.category}
-                </span>
-              )}
+              <div className="flex items-center gap-1.5">
+                {file._id && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onOpenVersionHistory?.(file);
+                    }}
+                    className="text-[11px] bg-black/40 backdrop-blur-md text-white/90 border border-white/20 hover:border-primary/60 hover:bg-black/60 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1 transition-all"
+                    title={`Version ${file.currentVersion || 1} (Click to view history)`}
+                  >
+                    <CounterClockwiseClockIcon className="w-3 h-3 text-primary" />
+                    <span>v{file.currentVersion || 1}</span>
+                  </button>
+                )}
+
+                {file.category && file.category !== "Other" && (
+                  <span className="text-[11px] bg-[hsl(var(--theme-color)/0.4)] backdrop-blur-md text-white border border-white/20 px-2.5 py-1 rounded-full font-semibold">
+                    {file.category}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* File Name & Document Status Badge */}
@@ -227,6 +247,22 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
                 tabIndex={0}
                 className="dropdown-content menu bg-card/95 backdrop-blur-2xl border border-border/80 rounded-xl z-30 w-48 p-2 shadow-2xl space-y-1 text-xs text-foreground"
               >
+                {file._id && (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onOpenVersionHistory?.(file);
+                      }}
+                      className="flex items-center gap-2 py-2 font-medium hover:text-primary transition-colors"
+                    >
+                      <CounterClockwiseClockIcon className="w-3.5 h-3.5 text-primary" />
+                      <span>Version History</span>
+                    </button>
+                  </li>
+                )}
                 <li>
                   <button onClick={handleCopyLink} className="flex items-center gap-2 py-2">
                     {copied ? (
@@ -258,9 +294,13 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
                   </li>
                 )}
                 <li>
-                  <button onClick={handleDelete} className="text-destructive font-semibold flex items-center gap-2 py-2">
+                  <button
+                    onClick={handleDelete}
+                    className="text-destructive font-semibold flex items-center gap-2 py-2 hover:bg-destructive/10 rounded-lg px-2 transition-colors w-full"
+                    title="Move to Recycle Bin (30-day retention)"
+                  >
                     <TrashIcon className="w-3.5 h-3.5" />
-                    <span>Delete File</span>
+                    <span>Move to Trash</span>
                   </button>
                 </li>
               </ul>

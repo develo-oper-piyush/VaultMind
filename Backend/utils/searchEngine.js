@@ -112,7 +112,10 @@ const tokenize = (text) => {
 
 const searchFiles = async (userId, query) => {
     try {
-        const files = await File.find({ userId }).lean();
+        const files = await File.find({
+            userId,
+            isDeleted: { $ne: true },
+        }).lean();
 
         if (!files || files.length === 0) {
             return [];

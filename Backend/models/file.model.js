@@ -90,6 +90,40 @@ const fileSchema = new mongoose.Schema({
             default: null,
         },
     },
+    // File Versioning fields
+    currentVersion: {
+        type: Number,
+        default: 1,
+        min: 1,
+    },
+    totalVersions: {
+        type: Number,
+        default: 1,
+        min: 1,
+    },
+    // Recycle Bin / Soft Delete fields
+    isDeleted: {
+        type: Boolean,
+        default: false,
+        index: true,
+    },
+    deletedAt: {
+        type: Date,
+        default: null,
+    },
+    deletionExpiresAt: {
+        type: Date,
+        default: null,
+        index: true,
+    },
+    deletedBy: {
+        type: String,
+        default: null,
+    },
+    originalFolder: {
+        type: String,
+        default: "/",
+    },
     createdAt: {
         type: Date,
         default: Date.now,
@@ -103,8 +137,31 @@ const fileSchema = new mongoose.Schema({
 // Compound index for user files
 fileSchema.index({ userId: 1, createdAt: -1 });
 
+// Compound indexes for active vs recycle bin queries
+fileSchema.index({ userId: 1, isDeleted: 1, createdAt: -1 });
+fileSchema.index({ userId: 1, isDeleted: 1, deletionExpiresAt: 1 });
+
 // Text index for keyword search
 fileSchema.index({ textContent: "text", keywords: "text", fileName: "text" });
 
+// Query helpers for active and deleted files
+fileSchema.query.active = function () {
+    return this.where({ isDeleted: { $ne: true } });
+};
+
+fileSchema.query.deleted = function () {
+    return this.where({ isDeleted: true });
+};
+
+// Static methods for convenience
+fileSchema.statics.findActive = function (filter = {}, projection = null, options = {}) {
+    return this.find({ ...filter, isDeleted: { $ne: true } }, projection, options);
+};
+
+fileSchema.statics.findDeleted = function (filter = {}, projection = null, options = {}) {
+    return this.find({ ...filter, isDeleted: true }, projection, options);
+};
+
 const File = mongoose.model("File", fileSchema);
 module.exports = File;
+
