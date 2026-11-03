@@ -543,7 +543,7 @@ router.get("/secure-file/:fileName", authMiddleware, async (req, res) => {
 // Rename file route
 router.post("/rename-file", authMiddleware, async (req, res) => {
     try {
-        const { oldFileName, newFileName } = req.body;
+        const { oldFileName, newFileName, fileId, allowDuplicate } = req.body;
         const userId = req.user.userId;
 
         if (!oldFileName || !newFileName) {
@@ -552,10 +552,40 @@ router.post("/rename-file", authMiddleware, async (req, res) => {
                 .json({ error: "Both old and new file names are required" });
         }
 
-        // Prevent renaming a soft-deleted file in Recycle Bin
-        const fileDoc = await File.findOne({ userId, fileName: oldFileName });
-        if (fileDoc && fileDoc.isDeleted) {
+        // Check file record & prevent renaming soft-deleted files
+        let targetFileDoc = null;
+        if (fileId) {
+            targetFileDoc = await File.findOne({ _id: fileId, userId });
+        } else {
+            targetFileDoc = await File.findOne({ fileName: oldFileName, userId });
+        }
+
+        if (targetFileDoc && targetFileDoc.isDeleted) {
             return res.status(400).json({ error: "Cannot rename a file that is in the Recycle Bin" });
+        }
+
+        // Check duplicate collision for rename
+        try {
+            if (targetFileDoc && !allowDuplicate) {
+                const renameCheck = await duplicateService.validateRename(
+                    userId,
+                    targetFileDoc._id,
+                    newFileName.trim()
+                );
+
+                if (!renameCheck.allowed) {
+                    return res.status(409).json({
+                        success: false,
+                        isDuplicate: true,
+                        confidenceLevel: renameCheck.confidenceLevel,
+                        highestScore: renameCheck.highestScore,
+                        error: `Rename conflict: '${newFileName.trim()}' matches existing file in your vault with ${renameCheck.confidenceLevel} confidence.`,
+                        duplicates: renameCheck.checkResult?.duplicates || [],
+                    });
+                }
+            }
+        } catch (dbErr) {
+            console.warn("Rename duplicate pre-check warning:", dbErr.message);
         }
 
         // Sanitize new file name (keep the timestamp prefix from old file)
@@ -616,11 +646,17 @@ router.post("/rename-file", authMiddleware, async (req, res) => {
             return res.status(500).json({ error: "Error completing rename" });
         }
 
-        if (fileDoc) {
-            fileDoc.fileName = sanitizedNewName;
-            fileDoc.supabasePath = newPath;
-            fileDoc.updatedAt = new Date();
-            await fileDoc.save();
+        // Synchronize MongoDB File record with new names
+        if (targetFileDoc) {
+            try {
+                targetFileDoc.fileName = sanitizedNewName;
+                targetFileDoc.originalName = newFileName.trim();
+                targetFileDoc.supabasePath = newPath;
+                targetFileDoc.updatedAt = new Date();
+                await targetFileDoc.save();
+            } catch (syncErr) {
+                console.warn("MongoDB record update error during rename:", syncErr.message);
+            }
         }
 
         res.json({

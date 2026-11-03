@@ -212,7 +212,8 @@ class DuplicateService {
 
         for (let i = 0; i < files.length; i++) {
             const fileA = files[i];
-            const idA = String(fileA._id);
+            if (!fileA || typeof fileA !== "object") continue;
+            const idA = fileA._id ? String(fileA._id) : (fileA.id ? String(fileA.id) : `file-${i}`);
 
             if (visited.has(idA)) continue;
 
@@ -220,7 +221,8 @@ class DuplicateService {
 
             for (let j = i + 1; j < files.length; j++) {
                 const fileB = files[j];
-                const idB = String(fileB._id);
+                if (!fileB || typeof fileB !== "object") continue;
+                const idB = fileB._id ? String(fileB._id) : (fileB.id ? String(fileB.id) : `file-${j}`);
 
                 if (visited.has(idB)) continue;
 

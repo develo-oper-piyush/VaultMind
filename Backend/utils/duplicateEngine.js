@@ -97,17 +97,26 @@ const normalizeBasename = (rawName) => {
         };
     }
 
-    const trimmed = rawName.trim().toLowerCase();
+    // Normalize Unicode diacritics (e.g. résumé -> resume) and collapse Unicode whitespace
+    const unicodeNormalized = typeof rawName.normalize === "function"
+        ? rawName.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        : rawName;
+    const trimmed = unicodeNormalized.replace(/[\u00A0\u2000-\u200B]/g, " ").trim().toLowerCase();
     const ext = path.extname(trimmed);
     const baseWithoutExt = ext ? trimmed.slice(0, -ext.length) : trimmed;
 
     const { cleanName, hadCopySuffix } = stripCopySuffix(baseWithoutExt);
 
     // Replace underscores, hyphens, periods with single space
-    const cleanBasename = cleanName
+    let cleanBasename = cleanName
         .replace(/[_\-.]+/g, " ")
         .replace(/\s+/g, " ")
         .trim();
+
+    // Fallback if stripping punctuation/copy suffixes left the basename empty (e.g. "(1).pdf", "---.txt")
+    if (!cleanBasename) {
+        cleanBasename = baseWithoutExt.trim() || "unnamed";
+    }
 
     const normalizedExt = ext ? ext.replace(/^\./, "").trim() : "";
 
@@ -566,6 +575,10 @@ const findDuplicates = (incomingFile, existingFiles, options = {}) => {
     const candidates = [];
 
     for (const existing of existingFiles) {
+        if (!existing || typeof existing !== "object") {
+            continue;
+        }
+
         const fileId = existing._id ? String(existing._id) : (existing.id ? String(existing.id) : null);
 
         // TC-10: Exclude self during update/rename

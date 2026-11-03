@@ -21,12 +21,12 @@ This document tracks the incremental, 7-day milestone-based implementation of **
 
 | Day | Milestone Target | Expected Commit Message | Target Date | Actual Date | Commit Hash | Push Status | Status |
 |:---:|---|---|:---:|:---:|:---:|:---:|:---:|
-| **Day 1** | Inspect repository, document architecture, define duplicate-matching rules, and establish test cases | `docs: define smart duplicate detection requirements` | 2026-10-15 | 2026-10-15 | `887f2fd` | Pending push | ✅ Completed |
+| **Day 1** | Inspect repository, document architecture, define duplicate-matching rules, and establish test cases | `docs: define smart duplicate detection requirements` | 2026-10-15 | 2026-10-15 | `9d31b85` | Pushed to `origin/main` | ✅ Completed |
 | **Day 2** | Implement normalization utilities and core duplicate-matching algorithm with unit tests | `feat: add duplicate matching engine` | 2026-10-16 | 2026-10-16 | `62daa61` | Pushed to `origin/main` | ✅ Completed |
 | **Day 3** | Integrate duplicate detection with backend service layer / data-access layer | `feat: integrate duplicate detection backend` | 2026-10-17 | 2026-10-17 | `ca02425` | Pushed to `origin/main` | ✅ Completed |
-| **Day 4** | Implement duplicate-checking API and consistent response handling | `feat: add duplicate detection API` | 2026-10-18 | 2026-10-18 | `68bd6b8` | Pushed to `origin/main` | ✅ Completed |
-| **Day 5** | Build frontend warning modal, match display, confidence badge, and review actions | `feat: add duplicate warning interface` | 2026-10-19 | 2026-10-19 | `810cd1d` | Pushed to `origin/main` | ✅ Completed |
-| **Day 6** | Add edge-case handling, integration tests, regression tests, and performance optimizations | `test: harden smart duplicate detection` | 2026-10-20 | — | — | — | ⏳ Scheduled |
+| **Day 4** | Implement duplicate-checking API and consistent response handling | `feat: add duplicate detection API` | 2026-10-18 | 2026-10-18 | `dd0d129` | Pushed to `origin/main` | ✅ Completed |
+| **Day 5** | Build frontend warning modal, match display, confidence badge, and review actions | `feat: add duplicate warning interface` | 2026-10-19 | 2026-10-19 | `683eec5` | Pushed to `origin/main` | ✅ Completed |
+| **Day 6** | Add edge-case handling, integration tests, regression tests, and performance optimizations | `test: harden smart duplicate detection` | 2026-10-20 | 2026-10-27 | `pending` | Staged for commit | ✅ Completed |
 | **Day 7** | End-to-end verification, issue fixes, final documentation, and verification report | `docs: finalize smart duplicate detection` | 2026-10-21 | — | — | — | ⏳ Scheduled |
 
 ---
@@ -115,10 +115,28 @@ This document tracks the incremental, 7-day milestone-based implementation of **
     - Added action handlers `handleDuplicateCancel`, `handleDuplicateUploadAnyway`, and `handleDuplicateRenameAndSave`.
 - **Tests Executed**:
   - Full regression check: all 7 backend test suites (`fileValidator`, `chunkingEngine`, `retrievalEngine`, `askDocumentService`, `duplicateEngine`, `duplicateService`, `duplicateApi`) -> 72/72 tests passing.
-- **Commit Hash**: `810cd1d`
+- **Commit Hash**: `683eec5`
 - **Push Status**: Pushed to `origin/main`
 - **Outstanding Issues**: None.
 - **Next Milestone**: Milestone 6 (`test: harden smart duplicate detection`) on the next calendar day.
+
+### Milestone 6: Edge-Case Hardening, Resilience & Performance Optimizations (Day 6)
+- **Date**: 2026-10-27
+- **Work Performed**:
+  - Implemented Unicode diacritic decomposition and accent stripping (e.g. `résumé.pdf` normalized to `resume 2026`) in `duplicateEngine.normalizeBasename`.
+  - Added Unicode non-breaking whitespace (`\u00A0`, `\u2000-\u200B`) and multi-space collapsing.
+  - Implemented safe fallback for basenames consisting entirely of punctuation or copy numbers (e.g. `(1).pdf`, `---.txt`), preventing empty basename errors.
+  - Hardened `findDuplicates` and `scanUserVault` to safely tolerate corrupted, null, or malformed candidate records in storage collections.
+  - Handled 0-byte buffer and boundary file size scoring deterministically without divide-by-zero risks.
+  - Added pre-rename collision detection in `POST /rename-file` preventing renames that collide with existing vault files unless explicitly permitted.
+  - Authored comprehensive hardening test suite [`Backend/tests/duplicateHarden.test.js`](../Backend/tests/duplicateHarden.test.js) (10/10 tests passing).
+  - Executed high-volume performance benchmarking: scanning 150 candidates in under 6ms (well below 50ms SLA).
+- **Tests Executed**:
+  - `node Backend/tests/duplicateHarden.test.js` -> 10/10 unit tests passing.
+- **Commit Hash**: Pending commit
+- **Push Status**: Pending push
+- **Outstanding Issues**: None.
+- **Next Milestone**: Milestone 7 (`docs: finalize smart duplicate detection`) on the next calendar day.
 
 ---
 
