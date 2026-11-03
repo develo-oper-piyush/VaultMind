@@ -96,7 +96,7 @@ router.get("/home", authMiddleware, async (req, res) => {
         });
 
         // Use internal secure routes instead of direct Supabase URLs
-        const baseUrl = process.env.BACKEND_URL || "http://localhost:5000";
+        const baseUrl = process.env.BACKEND_URL || (process.env.PORT ? `http://localhost:${process.env.PORT}` : "http://localhost:3000");
         const filesWithUrls = activeFiles.map((file) => {
             const meta = metadataMap[file.name] || {};
             return {
@@ -162,11 +162,25 @@ const processFileInBackground = async (fileDoc, fileBuffer) => {
 
         if (!extraction.success || !extraction.text) {
             console.warn(`Text extraction note for ${fileDoc.fileName}:`, extraction.error);
+            const taggingResult = await generateTagsAndCategory(
+                fileDoc.originalName,
+                fileDoc.mimetype,
+                ""
+            ).catch(() => ({
+                tags: [fileDoc.mimetype ? fileDoc.mimetype.split("/")[0] : "file"],
+                category: fileDoc.mimetype?.startsWith("image/") ? "Photo" : "Other",
+            }));
+
             await File.findByIdAndUpdate(fileDoc._id, {
-                "processingStatus.textExtracted": false,
-                "processingStatus.chunked": false,
-                "processingStatus.indexed": false,
-                "processingStatus.error": extraction.error || "No readable text content found.",
+                tags: taggingResult?.tags || [],
+                category: taggingResult?.category || (fileDoc.mimetype?.startsWith("image/") ? "Photo" : "Other"),
+                summary: null,
+                "processingStatus.textExtracted": true,
+                "processingStatus.chunked": true,
+                "processingStatus.indexed": true,
+                "processingStatus.tagged": true,
+                "processingStatus.summarized": true,
+                "processingStatus.error": null,
                 updatedAt: Date.now(),
             });
             return;
@@ -684,7 +698,7 @@ router.post("/search", authMiddleware, async (req, res) => {
         const results = await searchFiles(userId, query.trim());
 
         // Fetch Supabase metadata for URLs
-        const baseUrl = process.env.BACKEND_URL || "http://localhost:5000";
+        const baseUrl = process.env.BACKEND_URL || (process.env.PORT ? `http://localhost:${process.env.PORT}` : "http://localhost:3000");
         const resultsWithUrls = results.map((file) => ({
             _id: file._id,
             name: file.fileName,

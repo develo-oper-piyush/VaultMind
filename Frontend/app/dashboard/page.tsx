@@ -84,8 +84,8 @@ export default function Dashboard() {
             .filter(
               (f: FileItem) =>
                 f._id &&
-                (!f.processingStatus?.textExtracted ||
-                  !f.processingStatus?.tagged ||
+                !f.processingStatus?.error &&
+                (!f.processingStatus?.tagged ||
                   !f.processingStatus?.summarized)
             )
             .map((f: FileItem) => f._id as string)

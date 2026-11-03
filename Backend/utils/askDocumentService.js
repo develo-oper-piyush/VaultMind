@@ -1,5 +1,6 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const ChatMessage = require("../models/chatMessage.model");
+const File = require("../models/file.model");
 const ragConfig = require("../config/ragConfig");
 const { retrieveRelevantChunks } = require("./retrievalEngine");
 
@@ -131,11 +132,54 @@ const askDocumentQuestion = async (userId, rawQuestion, options = {}) => {
     let grounded = false;
     let modelUsed = "none";
 
-    // 3. Handle insufficient context: honest message, do not hallucinate
+    // 3. Handle insufficient context: intelligent conversational awareness or honest document fallback
     if (!hasSufficientEvidence) {
-        answer = ragConfig.INSUFFICIENT_CONTEXT_MESSAGE;
-        citations = [];
-        grounded = false;
+        if (!process.env.GEMINI_API_KEY) {
+            answer = ragConfig.INSUFFICIENT_CONTEXT_MESSAGE;
+            citations = [];
+            grounded = false;
+        } else {
+            try {
+                // Fetch list of user's active documents to give the AI context of their vault
+                const userFiles = await File.find({ userId })
+                    .select("originalName category")
+                    .lean()
+                    .catch(() => []);
+
+                const activeFiles = userFiles.filter((f) => !f.isDeleted);
+                const fileListSummary = activeFiles.length > 0
+                    ? activeFiles.map((f) => `- "${f.originalName}" (${f.category || "File"})`).join("\n")
+                    : "No uploaded documents found.";
+
+                const conversationalPrompt = `You are VaultMind AI, an intelligent, helpful document and cloud workspace assistant.
+
+Available files in user's vault:
+${fileListSummary}
+
+USER QUERY:
+"${question}"
+
+INSTRUCTIONS:
+1. GREETINGS & CASUAL MESSAGES (e.g., "hy", "hi", "hello", "hey", "what's up", "who are you", "what can you do"):
+   Respond warmly and enthusiastically as VaultMind AI. Introduce your capabilities (analyzing documents, answering questions, summarizing files) and invite the user to ask about their files (mentioning any available files like Resume.pdf).
+2. VAULT / FILE OVERVIEW (e.g., "what files do I have", "list my files"):
+   List and briefly summarize the user's available files from the list above.
+3. FACTUAL DOCUMENT QUESTIONS:
+   If the user asked a factual question that could not be verified in the documents, state politely: "${ragConfig.INSUFFICIENT_CONTEXT_MESSAGE}" and offer to answer questions about their available files.
+Keep the response helpful, natural, and concise (under 3 sentences).`;
+
+                const llmResponse = await generateWithGeminiFallback(conversationalPrompt);
+                answer = llmResponse.answer;
+                modelUsed = llmResponse.modelUsed;
+                grounded = false;
+                citations = [];
+            } catch (err) {
+                console.error("Conversational fallback error:", err.message);
+                answer = "Hello! I am VaultMind AI, your workspace assistant. I can answer questions about your uploaded documents or help you search your vault.";
+                modelUsed = "conversational-fallback";
+                grounded = false;
+            }
+        }
     } else {
         // 4. Sufficient context found: format prompt and invoke LLM
         citations = buildCitations(retrievalResult.chunks);

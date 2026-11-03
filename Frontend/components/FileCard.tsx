@@ -62,11 +62,17 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
 
     const fileUrl = React.useMemo(() => {
       let rawUrl = file.url;
-      if (rawUrl && rawUrl.includes("localhost:3000")) {
-        rawUrl = rawUrl.replace("localhost:3000", "localhost:5000");
+      if (rawUrl && rawUrl.includes("localhost:5000")) {
+        rawUrl = rawUrl.replace("localhost:5000", "localhost:3000");
       }
-      if (rawUrl?.startsWith("http")) return rawUrl;
-      return apiClient.getFileUrl(file.name);
+      let url = rawUrl?.startsWith("http") ? rawUrl : apiClient.getFileUrl(file.name);
+      if (typeof window !== "undefined") {
+        const token = localStorage.getItem("token");
+        if (token && !url.includes("token=")) {
+          url += (url.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(token);
+        }
+      }
+      return url;
     }, [file]);
 
     const handleCardClick = (e: React.MouseEvent) => {
@@ -247,6 +253,20 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
                 tabIndex={0}
                 className="dropdown-content menu bg-card/95 backdrop-blur-2xl border border-border/80 rounded-xl z-30 w-48 p-2 shadow-2xl space-y-1 text-xs text-foreground"
               >
+                <li>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      window.open(fileUrl, '_blank', 'noopener,noreferrer');
+                    }}
+                    className="flex items-center gap-2 py-2 font-medium hover:text-primary transition-colors"
+                  >
+                    <ArrowRightIcon className="w-3.5 h-3.5 text-primary" />
+                    <span>Open / Preview</span>
+                  </button>
+                </li>
                 {file._id && (
                   <li>
                     <button

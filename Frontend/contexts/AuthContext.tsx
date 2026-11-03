@@ -39,8 +39,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (username: string, password: string) => {
-    const response = await apiClient.login(username, password) as { success: boolean; user?: User };
+    const response = await apiClient.login(username, password) as { success: boolean; user?: User; token?: string };
     if (response.success && response.user) {
+      if (response.token && typeof window !== 'undefined') {
+        localStorage.setItem('token', response.token);
+      }
       setUser(response.user);
       router.push('/dashboard');
     }
@@ -54,6 +57,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('token');
+    }
     await apiClient.logout();
     setUser(null);
     router.push('/login');
