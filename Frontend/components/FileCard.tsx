@@ -18,6 +18,7 @@ import {
   ArrowRightIcon,
   CounterClockwiseClockIcon,
   ChatBubbleIcon,
+  Share1Icon,
 } from "@radix-ui/react-icons";
 
 interface FileCardProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -26,10 +27,12 @@ interface FileCardProps extends React.HTMLAttributes<HTMLDivElement> {
   onDelete: (fileName: string) => void;
   onChat?: (file: FileItem) => void;
   onOpenVersionHistory?: (file: FileItem) => void;
+  onShare?: (file: FileItem) => void;
+  onOcr?: (file: FileItem) => void;
 }
 
 const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
-  ({ className, file, isProcessing = false, onDelete, onChat, onOpenVersionHistory, ...props }, ref) => {
+  ({ className, file, isProcessing = false, onDelete, onChat, onOpenVersionHistory, onShare, onOcr, ...props }, ref) => {
     const [copied, setCopied] = React.useState(false);
 
     const isImage = React.useMemo(() => {
@@ -267,19 +270,51 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
                     <span>Open / Preview</span>
                   </button>
                 </li>
-                {file._id && (
+                {file._id && onOpenVersionHistory && (
                   <li>
                     <button
                       type="button"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        onOpenVersionHistory?.(file);
+                        onOpenVersionHistory(file);
                       }}
                       className="flex items-center gap-2 py-2 font-medium hover:text-primary transition-colors"
                     >
                       <CounterClockwiseClockIcon className="w-3.5 h-3.5 text-primary" />
                       <span>Version History</span>
+                    </button>
+                  </li>
+                )}
+                {file._id && onShare && (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onShare(file);
+                      }}
+                      className="flex items-center gap-2 py-2 font-medium hover:text-primary transition-colors"
+                    >
+                      <Share1Icon className="w-3.5 h-3.5 text-primary" />
+                      <span>Share Link...</span>
+                    </button>
+                  </li>
+                )}
+                {(isImage || isDocument) && file._id && onOcr && (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onOcr(file);
+                      }}
+                      className="flex items-center gap-2 py-2 font-medium hover:text-primary transition-colors"
+                    >
+                      <FileTextIcon className="w-3.5 h-3.5 text-primary" />
+                      <span>Extract Text (OCR)</span>
                     </button>
                   </li>
                 )}

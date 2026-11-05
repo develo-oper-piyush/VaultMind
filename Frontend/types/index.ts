@@ -23,6 +23,8 @@ export interface FileItem {
   tags?: string[];
   category?: string;
   summary?: string | null;
+  textContent?: string | null;
+  ocrText?: string | null;
   chunkCount?: number;
   currentVersion?: number;
   totalVersions?: number;

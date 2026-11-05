@@ -13,6 +13,8 @@ import { VersionHistoryModal } from '@/components/VersionHistoryModal';
 import { RecycleBinView } from '@/components/RecycleBinView';
 import { DuplicateWarningModal, DuplicateCandidate } from '@/components/DuplicateWarningModal';
 import { AskVaultMindModal } from '@/components/AskVaultMindModal';
+import { ShareModal } from '@/components/ShareModal';
+import { OcrModal } from '@/components/OcrModal';
 import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/lib/utils';
 import {
@@ -77,6 +79,14 @@ export default function Dashboard() {
   // Ask VaultMind Chat Modal state
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [selectedChatFile, setSelectedChatFile] = useState<FileItem | null>(null);
+
+  // Share Modal state
+  const [shareModalFile, setShareModalFile] = useState<FileItem | null>(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+  // OCR Modal state
+  const [ocrModalFile, setOcrModalFile] = useState<FileItem | null>(null);
+  const [isOcrModalOpen, setIsOcrModalOpen] = useState(false);
 
   const fetchFiles = useCallback(async () => {
     try {
@@ -994,6 +1004,14 @@ export default function Dashboard() {
                       isProcessing={processingFiles.has(file._id || '')}
                       onDelete={handleDelete}
                       onOpenVersionHistory={handleOpenVersionHistory}
+                      onShare={(f) => {
+                        setShareModalFile(f);
+                        setIsShareModalOpen(true);
+                      }}
+                      onOcr={(f) => {
+                        setOcrModalFile(f);
+                        setIsOcrModalOpen(true);
+                      }}
                       onChat={(f) => {
                         setSelectedChatFile(f);
                         setIsChatOpen(true);
@@ -1006,6 +1024,24 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Share Links Modal */}
+      <ShareModal
+        isOpen={isShareModalOpen}
+        file={shareModalFile}
+        onClose={() => setIsShareModalOpen(false)}
+      />
+
+      {/* OCR Text Extraction Modal */}
+      <OcrModal
+        isOpen={isOcrModalOpen}
+        file={ocrModalFile}
+        onClose={() => setIsOcrModalOpen(false)}
+        onOpenChat={(f) => {
+          setSelectedChatFile(f);
+          setIsChatOpen(true);
+        }}
+      />
 
       {/* Version History Modal */}
       <VersionHistoryModal

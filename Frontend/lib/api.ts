@@ -421,6 +421,125 @@ class ApiClient {
       }>;
     }>('/chat/conversations');
   }
+
+  // Share link endpoints
+  async createShareLink(
+    fileId: string,
+    options: {
+      expiresInHours?: number | null;
+      password?: string | null;
+      allowDownload?: boolean;
+      maxViews?: number | null;
+    }
+  ) {
+    return this.request<{
+      success: boolean;
+      message: string;
+      share: {
+        token: string;
+        shareUrl: string;
+        hasPassword: boolean;
+        expiresAt: string | null;
+        allowDownload: boolean;
+        maxViews: number | null;
+        viewsCount: number;
+        createdAt: string;
+      };
+    }>(`/share/file/${fileId}`, {
+      method: 'POST',
+      body: JSON.stringify(options),
+    });
+  }
+
+  async getFileShares(fileId: string) {
+    return this.request<{
+      success: boolean;
+      shares: Array<{
+        id: string;
+        token: string;
+        shareUrl: string;
+        hasPassword: boolean;
+        expiresAt: string | null;
+        allowDownload: boolean;
+        maxViews: number | null;
+        viewsCount: number;
+        createdAt: string;
+        isExpired: boolean;
+        isViewLimitReached: boolean;
+      }>;
+    }>(`/share/file/${fileId}`);
+  }
+
+  async revokeShareLink(token: string) {
+    return this.request<{
+      success: boolean;
+      message: string;
+    }>(`/share/${token}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getPublicShare(token: string) {
+    return this.request<{
+      success: boolean;
+      data: {
+        token: string;
+        isProtected: boolean;
+        hasPassword?: boolean;
+        fileName?: string;
+        mimetype?: string;
+        size?: number;
+        allowDownload?: boolean;
+        expiresAt?: string | null;
+        viewsCount?: number;
+        file?: {
+          id: string;
+          name: string;
+          mimetype: string;
+          size: number;
+          category?: string;
+          createdAt?: string;
+        };
+      };
+    }>(`/share/public/${token}`);
+  }
+
+  async verifySharePassword(token: string, password: string) {
+    return this.request<{
+      success: boolean;
+      authorized: boolean;
+      authToken?: string;
+    }>(`/share/public/${token}/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+  }
+
+  getPublicShareStreamUrl(token: string, authToken?: string, download?: boolean) {
+    const params = new URLSearchParams();
+    if (authToken) params.append('auth', authToken);
+    if (download) params.append('download', 'true');
+    const qs = params.toString();
+    return `${this.baseURL}/share/public/${token}/content${qs ? `?${qs}` : ''}`;
+  }
+
+  // OCR text extraction endpoint (quota-caching enabled)
+  async extractOcr(fileId: string) {
+    return this.request<{
+      success: boolean;
+      text: string;
+      cached: boolean;
+      wordCount: number;
+      characterCount: number;
+      file: {
+        id: string;
+        name: string;
+        mimetype: string;
+      };
+    }>(`/files/${fileId}/ocr`, {
+      method: 'POST',
+    });
+  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);

@@ -30,6 +30,14 @@ const fileSchema = new mongoose.Schema({
         type: String,
         default: null,
     },
+    ocrText: {
+        type: String,
+        default: null,
+    },
+    ocrProcessed: {
+        type: Boolean,
+        default: false,
+    },
     keywords: {
         type: [String],
         default: [],

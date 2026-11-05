@@ -10,6 +10,7 @@ const express = require("express");
 const userRouter = require("./routes/user.routes");
 const indexRouter = require("./routes/index.routes");
 const chatRouter = require("./routes/chat.routes");
+const shareRouter = require("./routes/share.routes");
 const cookieParser = require("cookie-parser");
 const fileUpload = require("express-fileupload");
 const connectToDB = require("./config/db");
@@ -54,6 +55,8 @@ app.use("/user", userRouter);
 app.use("/api/user", userRouter);
 app.use("/chat", chatRouter);
 app.use("/api/chat", chatRouter);
+app.use("/share", shareRouter);
+app.use("/api/share", shareRouter);
 app.use("/", indexRouter);
 
 // 404 Handler - Route not found

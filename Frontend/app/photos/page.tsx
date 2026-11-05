@@ -18,7 +18,11 @@ import {
   PersonIcon,
   ChevronLeftIcon,
   MagicWandIcon,
+  Share1Icon,
+  FileTextIcon,
 } from '@radix-ui/react-icons';
+import { ShareModal } from '@/components/ShareModal';
+import { OcrModal } from '@/components/OcrModal';
 
 const DEFAULT_SAMPLE_PHOTOS = [
   { image: 'https://picsum.photos/seed/a/800/1000', alt: 'Sample Photo One' },
@@ -34,6 +38,12 @@ export default function PhotosPage() {
   const [photoFiles, setPhotoFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
+
+  // Share & OCR Modals
+  const [selectedShareFile, setSelectedShareFile] = useState<FileItem | null>(null);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [selectedOcrFile, setSelectedOcrFile] = useState<FileItem | null>(null);
+  const [isOcrOpen, setIsOcrOpen] = useState(false);
 
   const fetchPhotos = async () => {
     try {
@@ -206,19 +216,63 @@ export default function PhotosPage() {
                 </span>
               </div>
 
-              {carouselItems[activeIndex]?.image && (
-                <button
-                  type="button"
-                  onClick={() => window.open(carouselItems[activeIndex].image, '_blank', 'noopener,noreferrer')}
-                  className="px-4 py-1.5 rounded-xl bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors flex items-center gap-2 text-xs shadow-sm cursor-pointer"
-                >
-                  <MagicWandIcon className="w-3.5 h-3.5" />
-                  <span>Open Full Resolution</span>
-                </button>
-              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                {photoFiles[activeIndex] && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedShareFile(photoFiles[activeIndex]);
+                        setIsShareOpen(true);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-card border border-border/80 hover:bg-accent text-foreground font-medium flex items-center gap-1.5 text-xs transition-colors shadow-sm cursor-pointer"
+                      title="Create secure share link"
+                    >
+                      <Share1Icon className="w-3.5 h-3.5 text-primary" />
+                      <span>Share</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedOcrFile(photoFiles[activeIndex]);
+                        setIsOcrOpen(true);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-card border border-border/80 hover:bg-accent text-foreground font-medium flex items-center gap-1.5 text-xs transition-colors shadow-sm cursor-pointer"
+                      title="Extract visual text with OCR"
+                    >
+                      <FileTextIcon className="w-3.5 h-3.5 text-primary" />
+                      <span>Extract Text (OCR)</span>
+                    </button>
+                  </>
+                )}
+                {carouselItems[activeIndex]?.image && (
+                  <button
+                    type="button"
+                    onClick={() => window.open(carouselItems[activeIndex].image, '_blank', 'noopener,noreferrer')}
+                    className="px-4 py-1.5 rounded-xl bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors flex items-center gap-2 text-xs shadow-sm cursor-pointer"
+                  >
+                    <MagicWandIcon className="w-3.5 h-3.5" />
+                    <span>Open Full Resolution</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Share Modal */}
+        <ShareModal
+          isOpen={isShareOpen}
+          file={selectedShareFile}
+          onClose={() => setIsShareOpen(false)}
+        />
+
+        {/* OCR Modal */}
+        <OcrModal
+          isOpen={isOcrOpen}
+          file={selectedOcrFile}
+          onClose={() => setIsOcrOpen(false)}
+        />
 
         {/* Footer info */}
         <div className="mt-12 text-center text-xs text-muted-foreground border-t border-border/40 pt-6">

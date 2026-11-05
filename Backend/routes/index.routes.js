@@ -39,6 +39,7 @@ const {
     emptyRecycleBin,
 } = require("../services/recycleBin.service");
 const { isValidObjectId } = require("../utils/fileValidation");
+const { performOcrOnFile, isOcrSupported } = require("../services/ocrService");
 
 const router = express.Router();
 
@@ -1248,6 +1249,34 @@ router.delete(
             return res.status(error.status || 500).json({
                 success: false,
                 error: error.message || "Failed to permanently delete file",
+            });
+        }
+    }
+);
+
+// OCR text extraction route (quota-protected with MongoDB caching)
+router.post(
+    ["/:fileId/ocr", "/api/files/:fileId/ocr"],
+    authMiddleware,
+    async (req, res) => {
+        try {
+            const { fileId } = req.params;
+            const userId = req.user.userId;
+
+            if (!isValidObjectId(fileId)) {
+                return res.status(400).json({
+                    success: false,
+                    error: "Invalid file ID format",
+                });
+            }
+
+            const result = await performOcrOnFile(fileId, userId);
+            return res.json(result);
+        } catch (error) {
+            console.error("OCR extraction error:", error);
+            return res.status(error.status || 400).json({
+                success: false,
+                error: error.message || "Failed to extract text from file",
             });
         }
     }
