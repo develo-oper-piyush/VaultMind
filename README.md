@@ -16,15 +16,27 @@
 ## ✨ Features
 
 - 🧠 **Google Gemini AI Engine** - Automated document categorization, smart multi-tag generation, and instant 2-3 sentence summarization with automated model fallback chains (`gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-1.5-flash`).
+- 💬 **Ask VaultMind RAG Assistant** - Grounded document Q&A engine with sliding-window chunking, keyword extraction, and cited evidence references.
+- 🖼️ **Multi-Layout Photo Gallery** - Switch seamlessly between **5 distinct responsive gallery layouts**:
+  - **Pinterest Masonry Grid**: Waterfall columns naturally honoring native aspect ratios (9:16, 16:9, 1:1).
+  - **Square Feed Grid**: Uniform square feed (Instagram & Unsplash style) with rapid hover zoom.
+  - **Cinema Spotlight & Filmstrip**: Full-screen stage focus with ambient glow backdrop, keyboard navigation (`←` / `→`), and an interactive thumbnail filmstrip rail.
+  - **Editorial Magazine Mosaic**: Dynamic composition with alternating 2x2 hero cards and responsive grid spans.
+  - **3D Depth Deck**: Fluid 3D perspective deck with spatial physics and gestures.
+- 🎨 **Built-in Photo Studio (Visual Editor)**:
+  - **Freehand Drawing**: Dual-mode pen brush and eraser on an isolated drawing buffer with palette selection and stroke width sliders.
+  - **Draggable Text Captions**: Place custom text annotations anywhere on the canvas with color and font size controls.
+  - **Fine Property Adjustments**: Real-time hardware-accelerated sliders for Brightness, Contrast, Saturation, Soft Blur, Sepia, Grayscale, and Hue Rotation.
+  - **Built-in & Custom Presets**: Apply instant aesthetic profiles (Vivid, Sunset, Noir, Cyberpunk, Vintage, Dramatic) or create and persist up to **3 custom user presets**.
+  - **Direct Drive Save**: Merge filters, brush marks, and captions into an uncompressed PNG and save a copy directly into your VaultMind Drive.
+- 🔗 **Secure Shareable Links (`/share/:token`)** - Generate unguessable 128-bit cryptographic links with custom expiration times, optional 6-digit PIN / password protection, view count limits, and direct download toggles.
+- 📄 **Quota-Optimized OCR Intelligence** - Extract printed and handwritten text from images using `gemini-3.5-flash-lite`, permanently cached in MongoDB (0 API calls on repeat visits) and indexed into Ask VaultMind.
+- ♻️ **Recycle Bin & Soft Deletion** - 30-day retention countdown, file restore with collision resolution, and permanent purge.
+- 🕒 **Immutable Version History** - Automatic version tracking across file renames and uploads with size delta calculation and one-click rollback.
+- ⏱️ **Debounced Search Filter** - Real-time delay searching that buffers user keystrokes for high-efficiency querying.
+- 🛡️ **Rate Limiting & Security** - Brute-force protection on authentication and password-protected share links using `express-rate-limit`.
 - 🎨 **WebGL PixelBlast Background** - Interactive Three.js particle canvas background on the landing page.
-- 🖼️ **Parallax File Cards** - Dedicated card design with image hover zoom, themed HSL glow shadows, and dynamic gradient overlays.
-- 📜 **Lenis Smooth Scroll** - Inertia-based smooth scrolling across all pages.
 - 🌓 **Persistent Dark Mode** - Default Dark mode theme with instant toggle switching preserved in `localStorage`.
-- 🗂️ **DaisyUI Dropdown Controls** - Sleek interactive filter dropdown buttons for File Types, Categories, Sort Ordering, and Card Actions.
-- 💀 **ShadCN Skeleton UI** - Loading placeholders for perceived performance while fetching files or processing uploads.
-- 🔍 **TF-IDF Semantic Search** - Natural language search matching file content, tags, categories, and names.
-- 🔒 **Secure Auth & Cloud Storage** - JWT session authentication with HTTP-only cookies, password hashing (bcrypt), and Supabase Storage integration.
-- 🔤 **Radix UI Iconography** - Minimalist vector iconography across all workspace interfaces.
 
 ---
 
@@ -45,29 +57,31 @@
 - **Database**: MongoDB Atlas & Mongoose ODM
 - **Cloud Bucket**: Supabase Storage
 - **AI Processing**: Google Generative AI SDK (`@google/genai` / `@google/generative-ai`)
+- **Security & Rate Limiting**: `express-rate-limit`, `bcrypt`, `jsonwebtoken`
 - **Parsers**: `pdf-parse` (PDFs) & `mammoth` (Word Documents)
-- **Auth**: JWT & bcrypt
 
 ---
 
 ## 📁 Project Structure
 
 ```
-Drive-Project/
+VaultMind/
 ├── Frontend/                 # Next.js 15 Frontend (Port 3001)
-│   ├── app/                  # App Router pages (Home, Dashboard, Profile, Login, Register)
-│   ├── components/           # UI Components (FileCard, PixelBlast, ThemeToggle, Skeleton, SmoothScroll)
+│   ├── app/                  # App Router pages (Home, Dashboard, Photos, Profile, Share, Login, Register)
+│   ├── components/           # UI Components (FileCard, PhotoEditorModal, ShareModal, OcrModal, DepthCarousel, PixelBlast)
 │   ├── contexts/             # AuthContext & ThemeContext
 │   ├── lib/                  # API client & utility helpers
-│   ├── public/               # Static assets
+│   ├── tests/                # Frontend integration & logic test suite
 │   └── package.json
 │
 └── Backend/                  # Express.js REST API (Port 3000)
-    ├── config/               # MongoDB & Supabase initialization (with DNS SRV resolution fixes)
-    ├── middlewares/          # JWT authentication middleware
-    ├── models/               # User & File Mongoose schemas
-    ├── routes/               # REST API endpoints (/files, /user, /api)
-    ├── utils/                # AI Tagger, AI Summarizer, Text Extractor, TF-IDF Search Engine
+    ├── config/               # MongoDB, Supabase, and RAG configuration
+    ├── middlewares/          # JWT auth & rate limiters
+    ├── models/               # User, File, Share, Version, and Chunk schemas
+    ├── routes/               # REST API endpoints (/files, /user, /chat, /share)
+    ├── services/             # Duplicate, OCR, Share, and Version services
+    ├── utils/                # AI Tagger, AI Summarizer, Text Extractor, RAG retrieval
+    ├── tests/                # Comprehensive unit & integration tests
     ├── app.js                # Server entry point
     └── package.json
 ```
@@ -123,84 +137,53 @@ Open **`http://localhost:3001`** in your browser!
 
 ---
 
-## 🐳 Docker Setup & Containerized Running
-
-Containerizing VaultMind eliminates local runtime and dependency mismatches (e.g. Node version or native binary issues) by isolating both Frontend and Backend into standardized Node 20 LTS environments.
-
-### Prerequisites
-
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running on your system.
-
-### Quick Start with Docker Compose
-
-1. **Environment Setup**: Ensure your backend environment variables are set in `Backend/env` (or refer to `.env.docker.example` for details).
-
-2. **Build and Run Containers**:
-
-    ```bash
-    docker compose up --build
-    ```
-
-3. **Access Applications**:
-    - **Frontend UI**: [http://localhost:3000](http://localhost:3000)
-    - **Backend REST API**: [http://localhost:5000](http://localhost:5000)
-
-4. **Stop Containers**:
-    ```bash
-    docker compose down
-    ```
-
-### Development Mode with Docker
-
-For hot-reloading code changes inside Docker containers:
-
-```bash
-docker compose -f docker-compose.dev.yml up --build
-```
-
----
-
-## 🌐 Deployment (Vercel & Render)
-
-Both **Frontend** and **Backend** can be deployed from this single repository by configuring the **Root Directory** setting:
-
-### 1. Frontend to **Vercel**
-
-- Connect your GitHub repository to Vercel.
-- Set **Root Directory** to `Frontend`.
-- Set Environment Variable: `NEXT_PUBLIC_API_URL` = `https://your-backend.onrender.com`
-
-### 2. Backend to **Render**
-
-- Create a new **Web Service** on Render connected to your repository.
-- Set **Root Directory** to `Backend`.
-- Set **Build Command**: `npm install`
-- Set **Start Command**: `node app.js`
-- Add environment variables (`MONGODB_URI`, `JWT_SECRET`, `SUPABASE_URL`, `SUPABASE_KEY`, `GEMINI_API_KEY`, `CLIENT_URL`).
-
----
-
 ## 📝 API Endpoints
 
 ### User & Authentication
 
-| Method | Endpoint                | Description                           |
-| :----- | :---------------------- | :------------------------------------ |
-| `POST` | `/user/register`        | Register a new user account           |
-| `POST` | `/user/login`           | Authenticate user & receive JWT token |
-| `GET`  | `/user/logout`          | Clear user session cookie             |
-| `GET`  | `/user/profile`         | Fetch authenticated profile details   |
-| `POST` | `/user/change-password` | Update account password               |
+| Method | Endpoint                | Description                                         |
+| :----- | :---------------------- | :-------------------------------------------------- |
+| `POST` | `/user/register`        | Register a new user account                         |
+| `POST` | `/user/login`           | Authenticate user with rate limiting (5 attempts/15m) |
+| `GET`  | `/user/logout`          | Clear user session cookie                           |
+| `GET`  | `/user/profile`         | Fetch authenticated profile details                 |
+| `POST` | `/user/change-password` | Update account password                             |
 
 ### File & Storage Management
 
-| Method   | Endpoint                       | Description                                     |
-| :------- | :----------------------------- | :---------------------------------------------- |
-| `GET`    | `/files`                       | List all files for the authenticated user       |
-| `POST`   | `/files/upload`                | Upload a file to Supabase & trigger AI pipeline |
-| `DELETE` | `/files/delete/:fileName`      | Delete file from Supabase & database            |
-| `GET`    | `/files/secure-file/:fileName` | Stream secure file inline with authentication   |
-| `GET`    | `/files/file-status/:fileId`   | Poll background AI processing status            |
+| Method   | Endpoint                             | Description                                         |
+| :------- | :----------------------------------- | :-------------------------------------------------- |
+| `GET`    | `/files`                             | List all active workspace files                     |
+| `POST`   | `/files/upload`                      | Upload a file to Supabase & trigger AI pipeline     |
+| `DELETE` | `/files/delete/:fileName`            | Soft-delete file to Recycle Bin                     |
+| `GET`    | `/files/secure-file/:fileName`       | Stream secure file inline with authentication       |
+| `POST`   | `/files/rename-file`                 | Rename file and update version history              |
+| `GET`    | `/files/:fileId/ocr`                 | Extract or fetch cached OCR text intelligence       |
+| `POST`   | `/files/check-duplicate`             | Pre-upload duplicate detection and collision check  |
+
+### Secure Share Links
+
+| Method   | Endpoint                    | Description                                         |
+| :------- | :-------------------------- | :-------------------------------------------------- |
+| `POST`   | `/api/share/create`         | Create revocable link with expiry & optional PIN    |
+| `GET`    | `/api/share/file/:fileId`   | List active share links for a file                  |
+| `DELETE` | `/api/share/:token`         | Instantly revoke an active share link               |
+| `GET`    | `/api/share/view/:token`    | Public view endpoint with PIN lock verification     |
+| `GET`    | `/api/share/download/:token`| Public direct download endpoint                     |
+
+---
+
+## 🚀 Future Scope & Roadmap
+
+- 📉 **Automatic Client-Side Image Compression**:
+  - Implement browser-level canvas compression (`image/webp` and high-efficiency `.jpeg` at 85% quality) prior to uploading, reducing 15MB photos to ~900KB with zero visible fidelity loss.
+  - Maximizes user storage headroom without consuming cloud bucket limits or exhausting backend memory.
+- 📊 **Dynamic Capacity-Based Vault Quotas**:
+  - Transition from fixed file-count limits to a flexible storage volume capacity bar (e.g., 50MB–100MB per user vault).
+- 🏷️ **User Subscription Tiers (Free vs. Pro)**:
+  - Role-based quota allocation allowing verified or upgraded accounts higher upload thresholds and custom API allowances.
+- ⚡ **Direct-to-Storage Presigned Uploads**:
+  - Stream large files directly from the browser to cloud bucket storage, eliminating server-side buffering.
 
 ---
 
