@@ -192,7 +192,7 @@ export function AskVaultMindModal({
                 aria-label="Document Scope Filter"
                 value={selectedFileId}
                 onChange={(e) => setSelectedFileId(e.target.value)}
-                className="bg-accent/60 border border-border/80 text-foreground text-xs rounded-xl px-3 py-2 pr-7 font-medium focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer max-w-[160px] sm:max-w-[220px] truncate"
+                className="select select-bordered select-sm bg-accent/60 border-border/80 text-foreground text-xs rounded-xl font-medium focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer max-w-[170px] sm:max-w-[240px] truncate"
               >
                 <option value="all">Scope: All Documents ({documentFiles.length})</option>
                 {documentFiles.map((f) => (

@@ -15,6 +15,7 @@ import { DuplicateWarningModal, DuplicateCandidate } from '@/components/Duplicat
 import { AskVaultMindModal } from '@/components/AskVaultMindModal';
 import { ShareModal } from '@/components/ShareModal';
 import { OcrModal } from '@/components/OcrModal';
+import { RenameModal } from '@/components/RenameModal';
 import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/lib/utils';
 import {
@@ -87,6 +88,10 @@ export default function Dashboard() {
   // OCR Modal state
   const [ocrModalFile, setOcrModalFile] = useState<FileItem | null>(null);
   const [isOcrModalOpen, setIsOcrModalOpen] = useState(false);
+
+  // Rename Modal state
+  const [renameModalFile, setRenameModalFile] = useState<FileItem | null>(null);
+  const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
 
   const fetchFiles = useCallback(async () => {
     try {
@@ -495,7 +500,7 @@ export default function Dashboard() {
                 className="px-4 py-2 bg-card border border-border/80 hover:bg-accent text-foreground text-sm font-medium rounded-xl transition-all flex items-center gap-2 shadow-sm"
               >
                 <ImageIcon className="w-4 h-4 text-primary" />
-                <span>Photos Carousel</span>
+                <span>Photo Gallery</span>
               </Link>
               <Link
                 href="/profile"
@@ -1012,6 +1017,10 @@ export default function Dashboard() {
                         setOcrModalFile(f);
                         setIsOcrModalOpen(true);
                       }}
+                      onRename={(f) => {
+                        setRenameModalFile(f);
+                        setIsRenameModalOpen(true);
+                      }}
                       onChat={(f) => {
                         setSelectedChatFile(f);
                         setIsChatOpen(true);
@@ -1024,6 +1033,17 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Rename File Modal */}
+      <RenameModal
+        isOpen={isRenameModalOpen}
+        file={renameModalFile}
+        onClose={() => setIsRenameModalOpen(false)}
+        onRenamed={() => {
+          fetchFiles();
+          fetchTrashCount();
+        }}
+      />
 
       {/* Share Links Modal */}
       <ShareModal

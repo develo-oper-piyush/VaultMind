@@ -229,7 +229,7 @@ export function ShareModal({ isOpen, file, onClose }: ShareModalProps) {
                 <select
                   value={expiresInHours}
                   onChange={(e) => setExpiresInHours(e.target.value)}
-                  className="w-full px-3 py-2 bg-card border border-input rounded-xl text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  className="select select-bordered select-sm w-full bg-card border-border/80 text-foreground rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/50"
                 >
                   <option value="1">1 Hour</option>
                   <option value="24">24 Hours (1 Day)</option>
@@ -275,14 +275,29 @@ export function ShareModal({ isOpen, file, onClose }: ShareModalProps) {
               </label>
 
               {enablePassword && (
-                <div className="pt-2 animate-in fade-in duration-200">
-                  <input
-                    type="password"
-                    placeholder="Enter link password (min 4 chars)..."
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-3 py-2 bg-card border border-input rounded-xl text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
+                <div className="pt-2 space-y-1.5 animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter link password (min 4 chars)..."
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="flex-1 px-3 py-2 bg-card border border-input rounded-xl text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const pin = Math.floor(100000 + Math.random() * 900000).toString();
+                        setPassword(pin);
+                      }}
+                      className="px-3 py-2 bg-card border border-border/80 hover:bg-accent text-foreground text-[11px] font-semibold rounded-xl transition-colors flex-shrink-0"
+                    >
+                      Generate PIN
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Recipients will be blocked by a lock screen until they provide this secret.
+                  </p>
                 </div>
               )}
             </div>

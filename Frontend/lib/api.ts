@@ -192,10 +192,14 @@ class ApiClient {
     });
   }
 
-  async renameFile(oldFileName: string, newFileName: string) {
-    return this.request('/files/rename-file', {
+  async renameFile(oldFileName: string, newFileName: string, fileId?: string, allowDuplicate?: boolean) {
+    return this.request<{
+      success: boolean;
+      message: string;
+      newFileName: string;
+    }>('/files/rename-file', {
       method: 'POST',
-      body: JSON.stringify({ oldFileName, newFileName }),
+      body: JSON.stringify({ oldFileName, newFileName, fileId, allowDuplicate }),
     });
   }
 

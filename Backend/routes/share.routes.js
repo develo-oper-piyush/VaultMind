@@ -1,6 +1,19 @@
 const express = require("express");
 const router = express.Router();
+const { rateLimit } = require("express-rate-limit");
 const authMiddleware = require("../middlewares/auth.middleware");
+
+// Rate limiter to prevent brute-forcing passwords on protected share links
+const sharePasswordLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        success: false,
+        error: "Too many password verification attempts. Please try again after 15 minutes.",
+    },
+});
 const {
     createShareLink,
     getFileShares,
@@ -116,8 +129,8 @@ router.get("/public/:token", async (req, res) => {
     }
 });
 
-// POST /share/public/:token/verify -> Verify password for protected link
-router.post("/public/:token/verify", async (req, res) => {
+// POST /share/public/:token/verify -> Verify password for protected link (rate-limited)
+router.post("/public/:token/verify", sharePasswordLimiter, async (req, res) => {
     try {
         const { token } = req.params;
         const { password } = req.body;

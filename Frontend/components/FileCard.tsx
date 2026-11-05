@@ -6,8 +6,6 @@ import { FileItem } from "@/types";
 import { apiClient } from "@/lib/api";
 import {
   DotsVerticalIcon,
-  CopyIcon,
-  CheckIcon,
   TrashIcon,
   ReaderIcon,
   FileTextIcon,
@@ -19,6 +17,7 @@ import {
   CounterClockwiseClockIcon,
   ChatBubbleIcon,
   Share1Icon,
+  Pencil1Icon,
 } from "@radix-ui/react-icons";
 
 interface FileCardProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -29,12 +28,11 @@ interface FileCardProps extends React.HTMLAttributes<HTMLDivElement> {
   onOpenVersionHistory?: (file: FileItem) => void;
   onShare?: (file: FileItem) => void;
   onOcr?: (file: FileItem) => void;
+  onRename?: (file: FileItem) => void;
 }
 
 const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
-  ({ className, file, isProcessing = false, onDelete, onChat, onOpenVersionHistory, onShare, onOcr, ...props }, ref) => {
-    const [copied, setCopied] = React.useState(false);
-
+  ({ className, file, isProcessing = false, onDelete, onChat, onOpenVersionHistory, onShare, onOcr, onRename, ...props }, ref) => {
     const isImage = React.useMemo(() => {
       if (!file.mimetype) return /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(file.name);
       return file.mimetype.startsWith("image/");
@@ -83,14 +81,6 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
         return;
       }
       window.open(fileUrl, '_blank', 'noopener,noreferrer');
-    };
-
-    const handleCopyLink = (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      navigator.clipboard.writeText(fileUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     };
 
     const handleDelete = (e: React.MouseEvent) => {
@@ -270,6 +260,22 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
                     <span>Open / Preview</span>
                   </button>
                 </li>
+                {onRename && (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onRename(file);
+                      }}
+                      className="flex items-center gap-2 py-2 font-medium hover:text-primary transition-colors"
+                    >
+                      <Pencil1Icon className="w-3.5 h-3.5 text-primary" />
+                      <span>Rename...</span>
+                    </button>
+                  </li>
+                )}
                 {file._id && onOpenVersionHistory && (
                   <li>
                     <button
@@ -318,21 +324,6 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
                     </button>
                   </li>
                 )}
-                <li>
-                  <button onClick={handleCopyLink} className="flex items-center gap-2 py-2">
-                    {copied ? (
-                      <>
-                        <CheckIcon className="w-3.5 h-3.5 text-emerald-500" />
-                        <span className="text-emerald-500 font-bold">Link Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <CopyIcon className="w-3.5 h-3.5" />
-                        <span>Copy Direct Link</span>
-                      </>
-                    )}
-                  </button>
-                </li>
                 {isDocument && onChat && (
                   <li>
                     <button
