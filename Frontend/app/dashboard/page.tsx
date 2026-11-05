@@ -13,6 +13,7 @@ import { VersionHistoryModal } from '@/components/VersionHistoryModal';
 import { RecycleBinView } from '@/components/RecycleBinView';
 import { DuplicateWarningModal, DuplicateCandidate } from '@/components/DuplicateWarningModal';
 import { AskVaultMindModal } from '@/components/AskVaultMindModal';
+import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/lib/utils';
 import {
   PersonIcon,
@@ -27,6 +28,7 @@ import {
   BookmarkIcon,
   CaretSortIcon,
   TrashIcon,
+  Cross2Icon,
 } from '@radix-ui/react-icons';
 import {
   ScrollProgressProvider,
@@ -38,6 +40,8 @@ export default function Dashboard() {
   const { user, logout, loading: authLoading } = useAuth();
   const [files, setFiles] = useState<FileItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+  const isDebouncing = searchQuery !== debouncedSearchQuery;
   const [typeFilter, setTypeFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [sortBy, setSortBy] = useState('name-asc');
@@ -160,11 +164,12 @@ export default function Dashboard() {
       filtered = filtered.filter((f) => f.category === categoryFilter);
     }
 
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
+    if (debouncedSearchQuery) {
+      const query = debouncedSearchQuery.toLowerCase().trim();
       filtered = filtered.filter(
         (f) =>
           f.name.toLowerCase().includes(query) ||
+          f.originalName?.toLowerCase().includes(query) ||
           f.tags?.some((t) => t.toLowerCase().includes(query)) ||
           f.category?.toLowerCase().includes(query)
       );
@@ -189,7 +194,7 @@ export default function Dashboard() {
     });
 
     return sorted;
-  }, [files, searchQuery, typeFilter, categoryFilter, sortBy]);
+  }, [files, debouncedSearchQuery, typeFilter, categoryFilter, sortBy]);
 
   const handleOpenVersionHistory = (file: FileItem) => {
     setVersionModalFile(file);
@@ -602,7 +607,7 @@ export default function Dashboard() {
             <RecycleBinView
               activeFileCount={files.length}
               maxActiveFiles={12}
-              onCountChange={(count) => setTrashCount(count)}
+              onCountChange={setTrashCount}
               onFileRestored={() => {
                 fetchFiles();
                 fetchTrashCount();
@@ -615,14 +620,36 @@ export default function Dashboard() {
               {/* Search & Upload Bar */}
               <div className="mb-3 flex flex-col sm:flex-row gap-4">
                 <div className="relative flex-1">
-                  <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                   <input
                     type="text"
                     placeholder="Search files by name, tags, or AI category..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 bg-card border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm shadow-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') setSearchQuery('');
+                    }}
+                    className="w-full pl-11 pr-20 py-3 bg-card border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm shadow-sm transition-all"
                   />
+                  <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                    {isDebouncing && (
+                      <span
+                        className="w-3.5 h-3.5 rounded-full border-2 border-primary/30 border-t-primary animate-spin"
+                        title="Searching..."
+                      />
+                    )}
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        className="p-1 text-muted-foreground hover:text-foreground rounded-md hover:bg-accent transition-colors"
+                        title="Clear search (Esc)"
+                        aria-label="Clear search"
+                      >
+                        <Cross2Icon className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <label className="px-6 py-3 bg-primary text-primary-foreground font-semibold text-sm rounded-xl cursor-pointer hover:opacity-95 transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 min-w-[140px]">
@@ -938,9 +965,25 @@ export default function Dashboard() {
                     <div className="flex justify-center mb-3">
                       <ArchiveIcon className="w-10 h-10 text-muted-foreground opacity-60" />
                     </div>
-                    <h3 className="font-bold text-base text-foreground mb-1">No files found</h3>
+                    <h3 className="font-bold text-base text-foreground mb-1">
+                      {searchQuery ? 'No matching files found' : 'No files found'}
+                    </h3>
                     <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                      Upload your first document, PDF, or image to get started with AI auto-tagging.
+                      {searchQuery ? (
+                        <span>
+                          No files matched &ldquo;{searchQuery}&rdquo;. Try another term or{' '}
+                          <button
+                            type="button"
+                            onClick={() => setSearchQuery('')}
+                            className="text-primary underline font-medium hover:opacity-80 inline"
+                          >
+                            clear search
+                          </button>
+                          .
+                        </span>
+                      ) : (
+                        'Upload your first document, PDF, or image to get started with AI auto-tagging.'
+                      )}
                     </p>
                   </div>
                 ) : (

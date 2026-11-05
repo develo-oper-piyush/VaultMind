@@ -33,6 +33,7 @@ export default function PhotosPage() {
   const { user, logout, loading: authLoading } = useAuth();
   const [photoFiles, setPhotoFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeIndex, setActiveIndex] = useState(0);
 
   const fetchPhotos = async () => {
     try {
@@ -63,13 +64,19 @@ export default function PhotosPage() {
   // Convert uploaded photo items or fallback to sample items
   const userPhotoItems = photoFiles.map((f) => {
     let rawUrl = f.url;
-    if (rawUrl && rawUrl.includes('localhost:3000')) {
-      rawUrl = rawUrl.replace('localhost:3000', 'localhost:5000');
+    if (rawUrl && rawUrl.includes('localhost:5000')) {
+      rawUrl = rawUrl.replace('localhost:5000', 'localhost:3000');
     }
-    const finalUrl = rawUrl && rawUrl.startsWith('http') ? rawUrl : apiClient.getFileUrl(f.name);
+    let finalUrl = rawUrl && rawUrl.startsWith('http') ? rawUrl : apiClient.getFileUrl(f.name);
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token');
+      if (token && !finalUrl.includes('token=')) {
+        finalUrl += (finalUrl.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token);
+      }
+    }
     return {
       image: finalUrl,
-      alt: f.name,
+      alt: f.originalName || f.name,
     };
   });
 
@@ -183,8 +190,32 @@ export default function PhotosPage() {
                 ease="power3.out"
                 autoplayDelay={3200}
                 showControls
-                showIndicators={false}
+                showIndicators={true}
+                onChange={(idx) => setActiveIndex(idx)}
               />
+            </div>
+
+            {/* Active Photo Toolbar */}
+            <div className="mt-4 pt-4 border-t border-border/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold truncate max-w-md">
+                  {carouselItems[activeIndex]?.alt || `Photo ${activeIndex + 1}`}
+                </span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">
+                  {activeIndex + 1} of {carouselItems.length}
+                </span>
+              </div>
+
+              {carouselItems[activeIndex]?.image && (
+                <button
+                  type="button"
+                  onClick={() => window.open(carouselItems[activeIndex].image, '_blank', 'noopener,noreferrer')}
+                  className="px-4 py-1.5 rounded-xl bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors flex items-center gap-2 text-xs shadow-sm cursor-pointer"
+                >
+                  <MagicWandIcon className="w-3.5 h-3.5" />
+                  <span>Open Full Resolution</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

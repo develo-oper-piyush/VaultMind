@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 const { body, validationResult } = require("express-validator");
 const userModel = require("../models/user.model");
 const authMiddleware = require("../middlewares/auth.middleware");
+const { loginLimiter } = require("../middlewares/rateLimiter.middleware");
 
 // Constants for limits
 const MAX_USERS = 15;
@@ -118,6 +119,7 @@ router.get("/login", (req, res) => {
 // POST /user/login -> Route for logging in the user
 router.post(
     "/login",
+    loginLimiter,
     body("username").trim().isLength({ min: 3 }),
     async (req, res) => {
         try {

@@ -255,11 +255,8 @@ export function RecycleBinView({
       });
 
       // Update local state without waiting for slow refetch
-      setItems((prev) => {
-        const next = prev.filter((f) => f._id !== item._id);
-        onCountChange?.(next.length);
-        return next;
-      });
+      setItems((prev) => prev.filter((f) => f._id !== item._id));
+      onCountChange?.(Math.max(0, items.length - 1));
 
       // Notify parent dashboard
       onFileRestored?.(item._id, restoredDisplayName, isRenamed);
@@ -305,11 +302,8 @@ export function RecycleBinView({
       });
 
       // Remove from local list
-      setItems((prev) => {
-        const next = prev.filter((f) => f._id !== item._id);
-        onCountChange?.(next.length);
-        return next;
-      });
+      setItems((prev) => prev.filter((f) => f._id !== item._id));
+      onCountChange?.(Math.max(0, items.length - 1));
 
       setItemToPermanentlyDelete(null);
     } catch (err: unknown) {

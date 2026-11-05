@@ -121,23 +121,25 @@ const DepthCarousel = ({
 
   const [active, setActive] = useState(0);
 
+  // Synchronously ensure cfgRef is always up-to-date
+  cfgRef.current = {
+    count,
+    depth,
+    spread,
+    tilt,
+    tiltDirection,
+    visibleCards,
+    falloff,
+    blur,
+    duration,
+    ease,
+    loop,
+    cardWidth,
+    autoplayDelay
+  };
+
   useEffect(() => {
     onChangeRef.current = onChange;
-    cfgRef.current = {
-      count,
-      depth,
-      spread,
-      tilt,
-      tiltDirection,
-      visibleCards,
-      falloff,
-      blur,
-      duration,
-      ease,
-      loop,
-      cardWidth,
-      autoplayDelay
-    };
   });
 
   const layout = useCallback((pos: number) => {
@@ -157,20 +159,23 @@ const DepthCarousel = ({
         if (d > n / 2) d -= n;
       }
 
-      const back = Math.max(0, d);
-      const az = Math.abs(d);
-      const shown = az <= cfg.visibleCards + 0.5;
+      const absD = Math.abs(d);
+      const shown = absD <= cfg.visibleCards + 0.5;
 
-      const tz = -cfg.depth * d;
+      const tz = -cfg.depth * absD;
       const tx = dir * cfg.spread * d;
-      const ry = dir * cfg.tilt * clamp(d, 0, 1);
+      const ry = dir * cfg.tilt * clamp(d, -1, 1);
 
-      let opacity = d < 0 ? Math.max(0, 1 + d) : 1;
-      if (!shown) opacity = 0;
+      let opacity = 1;
+      if (!shown) {
+        opacity = 0;
+      } else {
+        opacity = Math.max(0.15, 1 - absD * cfg.falloff);
+      }
 
-      const brightness = Math.max(0.15, 1 - back * cfg.falloff);
-      const blurPx = cfg.blur > 0 ? Math.min(cfg.blur, (back / Math.max(1, cfg.visibleCards)) * cfg.blur) : 0;
-      const zi = Math.round(2000 - d * 20);
+      const brightness = Math.max(0.25, 1 - absD * cfg.falloff);
+      const blurPx = cfg.blur > 0 ? Math.min(cfg.blur, (absD / Math.max(1, cfg.visibleCards)) * cfg.blur) : 0;
+      const zi = Math.round(2000 - absD * 50);
 
       el.style.transform = `translate(-50%, -50%) scale(${sc}) translateX(${tx.toFixed(2)}px) translateZ(${tz.toFixed(2)}px) rotateY(${ry.toFixed(3)}deg)`;
       el.style.opacity = opacity.toFixed(3);
@@ -179,9 +184,17 @@ const DepthCarousel = ({
       el.style.pointerEvents = shown && opacity > 0.05 ? 'auto' : 'none';
 
       const ov = overlayRefs.current[i];
-      if (ov) ov.style.opacity = clamp(back * cfg.falloff * 1.25, 0, 0.86).toFixed(3);
+      if (ov) ov.style.opacity = clamp(absD * cfg.falloff * 1.25, 0, 0.86).toFixed(3);
     }
   }, []);
+
+  // Reset positions when item count changes (e.g. from sample to loaded vault photos)
+  useEffect(() => {
+    posRef.current = 0;
+    focusRef.current = 0;
+    setActive(0);
+    layout(0);
+  }, [count, layout]);
 
   const notify = useCallback(
     (idx: number) => {
@@ -459,9 +472,13 @@ const DepthCarousel = ({
         <>
           <button
             type="button"
-            className="absolute left-4 top-1/2 z-[3000] grid h-[42px] w-[42px] -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-[rgba(18,20,26,0.55)] text-white backdrop-blur-md transition-[background,border-color,transform] duration-200 hover:border-white/40 hover:bg-[rgba(28,31,40,0.85)] active:scale-95"
+            className="absolute left-4 top-1/2 z-[3000] grid h-[42px] w-[42px] -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-[rgba(18,20,26,0.65)] text-white backdrop-blur-md transition-[background,border-color,transform] duration-200 hover:border-white/40 hover:bg-[rgba(28,31,40,0.9)] active:scale-95 cursor-pointer shadow-lg"
             aria-label="Previous slide"
-            onClick={() => navigateBy(-1)}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigateBy(-1);
+            }}
           >
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
               <path
@@ -476,9 +493,13 @@ const DepthCarousel = ({
           </button>
           <button
             type="button"
-            className="absolute right-4 top-1/2 z-[3000] grid h-[42px] w-[42px] -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-[rgba(18,20,26,0.55)] text-white backdrop-blur-md transition-[background,border-color,transform] duration-200 hover:border-white/40 hover:bg-[rgba(28,31,40,0.85)] active:scale-95"
+            className="absolute right-4 top-1/2 z-[3000] grid h-[42px] w-[42px] -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-[rgba(18,20,26,0.65)] text-white backdrop-blur-md transition-[background,border-color,transform] duration-200 hover:border-white/40 hover:bg-[rgba(28,31,40,0.9)] active:scale-95 cursor-pointer shadow-lg"
             aria-label="Next slide"
-            onClick={() => navigateBy(1)}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigateBy(1);
+            }}
           >
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
               <path
@@ -496,9 +517,10 @@ const DepthCarousel = ({
 
       {showIndicators && count > 1 && (
         <div
-          className="absolute bottom-4 left-1/2 z-[3000] flex -translate-x-1/2 gap-2 rounded-full bg-[rgba(14,16,22,0.4)] px-3 py-2 backdrop-blur-sm"
+          className="absolute bottom-4 left-1/2 z-[3000] flex -translate-x-1/2 gap-2 rounded-full bg-[rgba(14,16,22,0.6)] px-3 py-2 backdrop-blur-md border border-white/10 shadow-lg"
           role="tablist"
           aria-label="Slides"
+          onPointerDown={(e) => e.stopPropagation()}
         >
           {data.map((_, i) => (
             <button
@@ -508,9 +530,12 @@ const DepthCarousel = ({
               aria-selected={active === i}
               aria-label={`Go to slide ${i + 1}`}
               className={`h-[7px] cursor-pointer rounded-full transition-[width,background] duration-[250ms] ${
-                active === i ? 'w-5 bg-white' : 'w-[7px] bg-white/30'
+                active === i ? 'w-5 bg-primary shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'w-[7px] bg-white/40 hover:bg-white/70'
               }`}
-              onClick={() => setFocus(i, true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setFocus(i, true);
+              }}
             />
           ))}
         </div>
