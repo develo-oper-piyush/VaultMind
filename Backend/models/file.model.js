@@ -26,6 +26,16 @@ const fileSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
+    contentHash: {
+        type: String,
+        default: null,
+        index: true,
+    },
+    aiSource: {
+        type: String,
+        enum: ["inherited_hash", "inherited_similarity", "rule_based", "gemini_generated", "none"],
+        default: "none",
+    },
     textContent: {
         type: String,
         default: null,

@@ -28,6 +28,7 @@ const {
     downloadHistoricalVersion,
     restoreFileVersion,
 } = require("../services/version.service");
+const aiOptimizationService = require("../services/aiOptimizationService");
 const {
     DEFAULT_RETENTION_DAYS,
     MAX_ACTIVE_FILES_PER_USER,
@@ -149,7 +150,7 @@ router.get("/home", authMiddleware, async (req, res) => {
     }
 });
 
-// Background document processing: Text Extraction, Chunking & AI Analysis
+// Background document processing: Text Extraction, Chunking & Optimized AI Analysis
 const processFileInBackground = async (fileDoc, fileBuffer) => {
     try {
         console.log(`Starting background processing for file: ${fileDoc.fileName}`);
@@ -161,98 +162,79 @@ const processFileInBackground = async (fileDoc, fileBuffer) => {
             fileDoc.originalName
         );
 
-        if (!extraction.success || !extraction.text) {
-            console.warn(`Text extraction note for ${fileDoc.fileName}:`, extraction.error);
-            const taggingResult = await generateTagsAndCategory(
-                fileDoc.originalName,
-                fileDoc.mimetype,
-                ""
-            ).catch(() => ({
-                tags: [fileDoc.mimetype ? fileDoc.mimetype.split("/")[0] : "file"],
-                category: fileDoc.mimetype?.startsWith("image/") ? "Photo" : "Other",
-            }));
+        const textContent = extraction.success && extraction.text ? extraction.text : "";
+        const keywords = textContent ? extractKeywords(textContent) : [];
 
-            await File.findByIdAndUpdate(fileDoc._id, {
-                tags: taggingResult?.tags || [],
-                category: taggingResult?.category || (fileDoc.mimetype?.startsWith("image/") ? "Photo" : "Other"),
-                summary: null,
-                "processingStatus.textExtracted": true,
-                "processingStatus.chunked": true,
-                "processingStatus.indexed": true,
-                "processingStatus.tagged": true,
-                "processingStatus.summarized": true,
-                "processingStatus.error": null,
-                updatedAt: Date.now(),
-            });
-            return;
-        }
-
-        const textContent = extraction.text;
-        const keywords = extractKeywords(textContent);
-
-        // 2. Generate sliding-window overlapping chunks with page metadata
-        const chunks = chunkDocument(extraction, {
-            chunkSize: ragConfig.CHUNK_SIZE,
-            chunkOverlap: ragConfig.CHUNK_OVERLAP,
-        });
-
-        // 3. Persist document chunks to MongoDB (idempotent: purge previous chunks if any)
-        await DocumentChunk.deleteMany({ fileId: fileDoc._id });
-
-        if (chunks.length > 0) {
-            const chunkDocs = chunks.map((c) => ({
-                userId: fileDoc.userId,
-                fileId: fileDoc._id,
-                fileName: fileDoc.fileName,
-                originalName: fileDoc.originalName,
-                chunkIndex: c.chunkIndex,
-                text: c.text,
-                pageNumber: c.pageNumber,
-                charStart: c.charStart,
-                charEnd: c.charEnd,
-                keywords: extractKeywords(c.text),
-                metadata: {
-                    mimetype: fileDoc.mimetype,
-                    size: fileDoc.size,
-                    totalPages: extraction.pageCount,
-                },
-            }));
-
-            await DocumentChunk.insertMany(chunkDocs);
-            console.log(`Successfully stored ${chunkDocs.length} chunks for ${fileDoc.fileName}`);
-        }
-
-        // 4. Update file with extracted content and chunking status
-        await File.findByIdAndUpdate(fileDoc._id, {
+        // 2. Optimized Document AI Pipeline (Hash cache -> Rule classifier -> Semantic similarity -> Single truncated Gemini call)
+        const aiResult = await aiOptimizationService.processDocumentAI({
+            fileDoc,
+            fileBuffer,
             textContent,
             keywords,
-            chunkCount: chunks.length,
+        });
+
+        // 3. Generate sliding-window overlapping chunks with page metadata (if document has text)
+        let chunkCount = 0;
+        if (extraction.success && extraction.text) {
+            const chunks = chunkDocument(extraction, {
+                chunkSize: ragConfig.CHUNK_SIZE,
+                chunkOverlap: ragConfig.CHUNK_OVERLAP,
+            });
+
+            // Idempotent: purge previous chunks and insert new ones
+            await DocumentChunk.deleteMany({ fileId: fileDoc._id });
+
+            if (chunks.length > 0) {
+                const chunkDocs = chunks.map((c) => ({
+                    userId: fileDoc.userId,
+                    fileId: fileDoc._id,
+                    fileName: fileDoc.fileName,
+                    originalName: fileDoc.originalName,
+                    chunkIndex: c.chunkIndex,
+                    text: c.text,
+                    pageNumber: c.pageNumber,
+                    charStart: c.charStart,
+                    charEnd: c.charEnd,
+                    keywords: extractKeywords(c.text),
+                    metadata: {
+                        mimetype: fileDoc.mimetype,
+                        size: fileDoc.size,
+                        totalPages: extraction.pageCount,
+                    },
+                }));
+
+                await DocumentChunk.insertMany(chunkDocs);
+                chunkCount = chunkDocs.length;
+                console.log(`Successfully stored ${chunkDocs.length} chunks for ${fileDoc.fileName}`);
+            }
+        }
+
+        // 4. Single Atomic MongoDB Write (cuts DB writes by 50% and sets smart readable title if name was random!)
+        const updateFields = {
+            contentHash: aiResult.contentHash,
+            aiSource: aiResult.aiSource,
+            textContent: textContent || null,
+            keywords,
+            chunkCount,
+            tags: aiResult.tags || [],
+            category: aiResult.category || "Other",
+            summary: aiResult.summary || null,
             "processingStatus.textExtracted": true,
             "processingStatus.chunked": true,
             "processingStatus.indexed": true,
-            updatedAt: Date.now(),
-        });
-
-        console.log(`Text extracted and indexed for file: ${fileDoc.fileName}`);
-
-        // 5. Run AI tagging and summarization in parallel
-        const [taggingResult, summary] = await Promise.all([
-            generateTagsAndCategory(fileDoc.originalName, fileDoc.mimetype, textContent),
-            generateSummary(textContent),
-        ]);
-
-        // 6. Update with final AI results
-        await File.findByIdAndUpdate(fileDoc._id, {
-            tags: taggingResult.tags || [],
-            category: taggingResult.category || "Other",
-            summary: summary,
             "processingStatus.tagged": true,
             "processingStatus.summarized": true,
-            "processingStatus.error": taggingResult.error || null,
+            "processingStatus.error": null,
             updatedAt: Date.now(),
-        });
+        };
 
-        console.log(`Document processing completed successfully for: ${fileDoc.fileName}`);
+        if (aiResult.smartTitle) {
+            updateFields.originalName = aiResult.smartTitle;
+        }
+
+        await File.findByIdAndUpdate(fileDoc._id, updateFields);
+
+        console.log(`Document processing completed successfully for: ${fileDoc.fileName} (AI Source: ${aiResult.aiSource})`);
     } catch (error) {
         console.error(`Background document processing error for ${fileDoc.fileName}:`, error);
         await File.findByIdAndUpdate(fileDoc._id, {

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FileItem } from '@/types';
 import { apiClient } from '@/lib/api';
+import { isUninterpretableOrRandomName } from '@/lib/filenameUtils';
 import {
   Cross2Icon,
   MixerHorizontalIcon,
@@ -519,7 +520,8 @@ export function PhotoEditorModal({
         throw new Error('Failed to generate image data.');
       }
 
-      const cleanBaseName = fileName.replace(/\.[^/.]+$/, '');
+      const isRandom = isUninterpretableOrRandomName(fileName);
+      const cleanBaseName = isRandom ? 'Photo' : fileName.replace(/\.[^/.]+$/, '');
       const editedFileName = `${cleanBaseName}_edited_${Date.now().toString().slice(-4)}.png`;
       const editedFile = new File([blob], editedFileName, { type: 'image/png' });
 

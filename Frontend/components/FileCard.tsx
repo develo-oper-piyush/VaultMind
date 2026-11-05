@@ -29,10 +29,11 @@ interface FileCardProps extends React.HTMLAttributes<HTMLDivElement> {
   onShare?: (file: FileItem) => void;
   onOcr?: (file: FileItem) => void;
   onRename?: (file: FileItem) => void;
+  onTagClick?: (tag: string) => void;
 }
 
 const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
-  ({ className, file, isProcessing = false, onDelete, onChat, onOpenVersionHistory, onShare, onOcr, onRename, ...props }, ref) => {
+  ({ className, file, isProcessing = false, onDelete, onChat, onOpenVersionHistory, onShare, onOcr, onRename, onTagClick, ...props }, ref) => {
     const isImage = React.useMemo(() => {
       if (!file.mimetype) return /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(file.name);
       return file.mimetype.startsWith("image/");
@@ -198,12 +199,23 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
             {file.tags && file.tags.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-4">
                 {file.tags.map((tag) => (
-                  <span
+                  <button
                     key={tag}
-                    className="text-[10px] bg-black/30 backdrop-blur-md border border-white/15 text-white/90 px-2 py-0.5 rounded-md font-medium"
+                    type="button"
+                    onClick={(e) => {
+                      if (onTagClick) {
+                        e.stopPropagation();
+                        onTagClick(tag);
+                      }
+                    }}
+                    className={cn(
+                      'text-[10px] bg-black/30 backdrop-blur-md border border-white/15 text-white/90 px-2 py-0.5 rounded-md font-medium transition-colors',
+                      onTagClick && 'hover:bg-primary/30 hover:border-primary/50 cursor-pointer'
+                    )}
+                    title={onTagClick ? `Filter by #${tag}` : undefined}
                   >
                     #{tag}
-                  </span>
+                  </button>
                 ))}
               </div>
             )}

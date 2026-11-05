@@ -37,6 +37,23 @@ import {
   ScrollProgressProvider,
   ScrollProgress,
 } from '@/components/animate-ui/primitives/animate/scroll-progress';
+import { PreUploadRenameModal } from '@/components/PreUploadRenameModal';
+import { isUninterpretableOrRandomName } from '@/lib/filenameUtils';
+
+const ALL_CATEGORIES = [
+  'Photo',
+  'Document',
+  'Invoice',
+  'Resume',
+  'Contract',
+  'Screenshot',
+  'Report',
+  'Presentation',
+  'Spreadsheet',
+  'Video',
+  'Audio',
+  'Other',
+] as const;
 
 export default function Dashboard() {
   const router = useRouter();
@@ -92,6 +109,10 @@ export default function Dashboard() {
   // Rename Modal state
   const [renameModalFile, setRenameModalFile] = useState<FileItem | null>(null);
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
+
+  // Pre-Upload Rename Modal state (Intercepts random / gibberish filenames before upload)
+  const [pendingRenameFile, setPendingRenameFile] = useState<File | null>(null);
+  const [isPreUploadRenameOpen, setIsPreUploadRenameOpen] = useState(false);
 
   const fetchFiles = useCallback(async () => {
     try {
@@ -168,6 +189,52 @@ export default function Dashboard() {
     return 'other';
   };
 
+  // Category and Tag counts
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    files.forEach((f) => {
+      const cat = f.category || 'Other';
+      counts.set(cat, (counts.get(cat) || 0) + 1);
+    });
+    return counts;
+  }, [files]);
+
+  const availableTags = useMemo(() => {
+    const tagCounts = new Map<string, number>();
+    files.forEach((f) => {
+      f.tags?.forEach((t) => {
+        const clean = t.toLowerCase().trim();
+        if (clean) tagCounts.set(clean, (tagCounts.get(clean) || 0) + 1);
+      });
+    });
+    return Array.from(tagCounts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([tag, count]) => ({ tag, count }));
+  }, [files]);
+
+  const metadataCounts = useMemo(() => {
+    let aiTagged = 0;
+    let hasSummary = 0;
+    let indexed = 0;
+    files.forEach((f) => {
+      if (f.tags && f.tags.length > 0) aiTagged++;
+      if (f.summary) hasSummary++;
+      if ((f.chunkCount && f.chunkCount > 0) || f.processingStatus?.indexed) indexed++;
+    });
+    return { aiTagged, hasSummary, indexed };
+  }, [files]);
+
+  const getCategoryFilterLabel = () => {
+    if (categoryFilter === 'all') return 'Category / Tags: All';
+    if (categoryFilter.startsWith('tag:')) {
+      return `Tag: #${categoryFilter.replace('tag:', '')}`;
+    }
+    if (categoryFilter === 'meta:ai-tagged') return 'Meta: AI Tagged';
+    if (categoryFilter === 'meta:has-summary') return 'Meta: Summarized';
+    if (categoryFilter === 'meta:indexed') return 'Meta: Search Indexed';
+    return `Category: ${categoryFilter}`;
+  };
+
   const filteredFiles = useMemo(() => {
     let filtered = files;
 
@@ -176,7 +243,22 @@ export default function Dashboard() {
     }
 
     if (categoryFilter !== 'all') {
-      filtered = filtered.filter((f) => f.category === categoryFilter);
+      if (categoryFilter.startsWith('tag:')) {
+        const targetTag = categoryFilter.replace('tag:', '').toLowerCase();
+        filtered = filtered.filter((f) =>
+          f.tags?.some((t) => t.toLowerCase() === targetTag)
+        );
+      } else if (categoryFilter === 'meta:ai-tagged') {
+        filtered = filtered.filter((f) => f.tags && f.tags.length > 0);
+      } else if (categoryFilter === 'meta:has-summary') {
+        filtered = filtered.filter((f) => !!f.summary);
+      } else if (categoryFilter === 'meta:indexed') {
+        filtered = filtered.filter(
+          (f) => (f.chunkCount && f.chunkCount > 0) || f.processingStatus?.indexed
+        );
+      } else {
+        filtered = filtered.filter((f) => f.category === categoryFilter);
+      }
     }
 
     if (debouncedSearchQuery) {
@@ -262,31 +344,7 @@ export default function Dashboard() {
     }
   };
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Client-side pre-validation
-    if (file.size === 0) {
-      setError('Cannot upload empty file (0 bytes). Please select a file with content.');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setError(`File size (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds the 5MB limit. Please upload a smaller document.`);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-
-    const dangerous = ['.exe', '.bat', '.cmd', '.sh', '.php', '.js', '.vbs'];
-    const lowerName = file.name.toLowerCase();
-    if (dangerous.some((ext) => lowerName.endsWith(ext))) {
-      setError(`File type not allowed for security reasons.`);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-
+  const processUploadWithDuplicateCheck = async (file: File) => {
     setUploading(true);
     setUploadStatus(`Screening "${file.name}" for duplicate records...`);
     setError('');
@@ -341,6 +399,59 @@ export default function Dashboard() {
       setUploadStatus(null);
       setUploading(false);
     }
+  };
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Client-side pre-validation
+    if (file.size === 0) {
+      setError('Cannot upload empty file (0 bytes). Please select a file with content.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError(`File size (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds the 5MB limit. Please upload a smaller document.`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    const dangerous = ['.exe', '.bat', '.cmd', '.sh', '.php', '.js', '.vbs'];
+    const lowerName = file.name.toLowerCase();
+    if (dangerous.some((ext) => lowerName.endsWith(ext))) {
+      setError(`File type not allowed for security reasons.`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    // Intercept random, machine-generated, or gibberish filenames before uploading to drive
+    if (isUninterpretableOrRandomName(file.name)) {
+      setPendingRenameFile(file);
+      setIsPreUploadRenameOpen(true);
+      return;
+    }
+
+    await processUploadWithDuplicateCheck(file);
+  };
+
+  const handleConfirmPreUploadRename = async (renamedFile: File) => {
+    setIsPreUploadRenameOpen(false);
+    setPendingRenameFile(null);
+    await processUploadWithDuplicateCheck(renamedFile);
+  };
+
+  const handleUploadAsOriginal = async (originalFile: File) => {
+    setIsPreUploadRenameOpen(false);
+    setPendingRenameFile(null);
+    await processUploadWithDuplicateCheck(originalFile);
+  };
+
+  const handleCancelPreUploadRename = () => {
+    setIsPreUploadRenameOpen(false);
+    setPendingRenameFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleDuplicateCancel = () => {
@@ -790,79 +901,158 @@ export default function Dashboard() {
                   </ul>
                 </div>
 
-                {/* Categories DaisyUI Dropdown */}
+                {/* Categories, Tags & Metadata DaisyUI Dropdown */}
                 <div className="dropdown dropdown-bottom">
                   <div
                     tabIndex={0}
                     role="button"
-                    className="btn btn-outline border-border/80 bg-card hover:bg-accent text-foreground text-xs font-semibold rounded-xl flex items-center gap-2"
+                    className={cn(
+                      'btn btn-outline border-border/80 bg-card hover:bg-accent text-foreground text-xs font-semibold rounded-xl flex items-center gap-2 cursor-pointer',
+                      categoryFilter !== 'all' && 'border-primary/60 bg-primary/10 text-primary'
+                    )}
                   >
                     <BookmarkIcon className="w-3.5 h-3.5 text-primary" />
-                    <span>Category: {categoryFilter === 'all' ? 'All' : categoryFilter}</span>
-                    <CaretSortIcon className="w-3.5 h-3.5" />
+                    <span>{getCategoryFilterLabel()}</span>
+                    {categoryFilter !== 'all' ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCategoryFilter('all');
+                        }}
+                        className="p-0.5 rounded-full hover:bg-primary/20 text-primary cursor-pointer"
+                        title="Clear filter"
+                      >
+                        <Cross2Icon className="w-3 h-3" />
+                      </button>
+                    ) : (
+                      <CaretSortIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                    )}
                   </div>
                   <ul
                     tabIndex={0}
-                    className="dropdown-content menu bg-card border border-border/80 rounded-xl z-30 w-52 p-2 shadow-2xl space-y-1 text-xs"
+                    className="dropdown-content menu bg-card/95 backdrop-blur-2xl border border-border/80 rounded-xl z-30 w-64 max-h-72 sm:max-h-80 overflow-y-auto overscroll-contain p-2 shadow-2xl space-y-1 text-xs scrollbar-thin"
                   >
                     <li>
                       <button
                         onClick={() => setCategoryFilter('all')}
-                        className={`flex items-center gap-2 ${
+                        className={`flex items-center justify-between py-2 ${
                           categoryFilter === 'all' ? 'active bg-primary/20 text-primary font-bold' : ''
                         }`}
                       >
-                        <BookmarkIcon className="w-3.5 h-3.5" /> All Categories
+                        <span className="flex items-center gap-2">
+                          <BookmarkIcon className="w-3.5 h-3.5" />
+                          <span>All Categories & Tags</span>
+                        </span>
+                        <span className="text-[10px] opacity-70 font-mono">({files.length})</span>
+                      </button>
+                    </li>
+
+                    {/* Section: AI Categories */}
+                    <li className="menu-title text-[10px] uppercase font-bold text-muted-foreground tracking-wider pt-2 border-t border-border/50">
+                      AI Categories
+                    </li>
+                    {ALL_CATEGORIES.map((cat) => {
+                      const count = categoryCounts.get(cat) || 0;
+                      return (
+                        <li key={cat}>
+                          <button
+                            onClick={() => setCategoryFilter(cat)}
+                            className={`flex items-center justify-between py-1.5 ${
+                              categoryFilter === cat ? 'active bg-primary/20 text-primary font-bold' : ''
+                            }`}
+                          >
+                            <span className="flex items-center gap-2 truncate">
+                              {cat === 'Photo' || cat === 'Screenshot' ? (
+                                <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
+                              ) : cat === 'Video' ? (
+                                <VideoIcon className="w-3.5 h-3.5 text-purple-400" />
+                              ) : cat === 'Audio' ? (
+                                <SpeakerLoudIcon className="w-3.5 h-3.5 text-pink-400" />
+                              ) : cat === 'Other' ? (
+                                <ArchiveIcon className="w-3.5 h-3.5 text-cyan-400" />
+                              ) : (
+                                <FileTextIcon className="w-3.5 h-3.5 text-blue-400" />
+                              )}
+                              <span>{cat}</span>
+                            </span>
+                            <span className="text-[10px] opacity-70 font-mono">({count})</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+
+                    {/* Section: Discovered Tags */}
+                    <li className="menu-title text-[10px] uppercase font-bold text-muted-foreground tracking-wider pt-2 border-t border-border/50">
+                      Discovered Tags ({availableTags.length})
+                    </li>
+                    {availableTags.length === 0 ? (
+                      <li className="disabled text-muted-foreground text-[11px] px-3 py-1 italic">
+                        No tags found
+                      </li>
+                    ) : (
+                      availableTags.map(({ tag, count }) => (
+                        <li key={tag}>
+                          <button
+                            onClick={() => setCategoryFilter(`tag:${tag}`)}
+                            className={`flex items-center justify-between py-1.5 ${
+                              categoryFilter === `tag:${tag}` ? 'active bg-primary/20 text-primary font-bold' : ''
+                            }`}
+                          >
+                            <span className="flex items-center gap-1.5 truncate">
+                              <span className="text-primary font-bold">#</span>
+                              <span className="truncate">{tag}</span>
+                            </span>
+                            <span className="text-[10px] opacity-70 font-mono">({count})</span>
+                          </button>
+                        </li>
+                      ))
+                    )}
+
+                    {/* Section: Related Metadata Content */}
+                    <li className="menu-title text-[10px] uppercase font-bold text-muted-foreground tracking-wider pt-2 border-t border-border/50">
+                      Related Metadata
+                    </li>
+                    <li>
+                      <button
+                        onClick={() => setCategoryFilter('meta:ai-tagged')}
+                        className={`flex items-center justify-between py-1.5 ${
+                          categoryFilter === 'meta:ai-tagged' ? 'active bg-primary/20 text-primary font-bold' : ''
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <BookmarkIcon className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>AI Auto-Tagged</span>
+                        </span>
+                        <span className="text-[10px] opacity-70 font-mono">({metadataCounts.aiTagged})</span>
                       </button>
                     </li>
                     <li>
                       <button
-                        onClick={() => setCategoryFilter('Invoice')}
-                        className={`flex items-center gap-2 ${
-                          categoryFilter === 'Invoice' ? 'active bg-primary/20 text-primary font-bold' : ''
+                        onClick={() => setCategoryFilter('meta:has-summary')}
+                        className={`flex items-center justify-between py-1.5 ${
+                          categoryFilter === 'meta:has-summary' ? 'active bg-primary/20 text-primary font-bold' : ''
                         }`}
                       >
-                        <FileTextIcon className="w-3.5 h-3.5" /> Invoice
+                        <span className="flex items-center gap-2">
+                          <FileTextIcon className="w-3.5 h-3.5 text-blue-400" />
+                          <span>Has AI Summary</span>
+                        </span>
+                        <span className="text-[10px] opacity-70 font-mono">({metadataCounts.hasSummary})</span>
                       </button>
                     </li>
                     <li>
                       <button
-                        onClick={() => setCategoryFilter('Resume')}
-                        className={`flex items-center gap-2 ${
-                          categoryFilter === 'Resume' ? 'active bg-primary/20 text-primary font-bold' : ''
+                        onClick={() => setCategoryFilter('meta:indexed')}
+                        className={`flex items-center justify-between py-1.5 ${
+                          categoryFilter === 'meta:indexed' ? 'active bg-primary/20 text-primary font-bold' : ''
                         }`}
                       >
-                        <FileTextIcon className="w-3.5 h-3.5" /> Resume
-                      </button>
-                    </li>
-                    <li>
-                      <button
-                        onClick={() => setCategoryFilter('Contract')}
-                        className={`flex items-center gap-2 ${
-                          categoryFilter === 'Contract' ? 'active bg-primary/20 text-primary font-bold' : ''
-                        }`}
-                      >
-                        <FileTextIcon className="w-3.5 h-3.5" /> Contract
-                      </button>
-                    </li>
-                    <li>
-                      <button
-                        onClick={() => setCategoryFilter('Photo')}
-                        className={`flex items-center gap-2 ${
-                          categoryFilter === 'Photo' ? 'active bg-primary/20 text-primary font-bold' : ''
-                        }`}
-                      >
-                        <ImageIcon className="w-3.5 h-3.5" /> Photo
-                      </button>
-                    </li>
-                    <li>
-                      <button
-                        onClick={() => setCategoryFilter('Document')}
-                        className={`flex items-center gap-2 ${
-                          categoryFilter === 'Document' ? 'active bg-primary/20 text-primary font-bold' : ''
-                        }`}
-                      >
-                        <FileTextIcon className="w-3.5 h-3.5" /> Document
+                        <span className="flex items-center gap-2">
+                          <ArchiveIcon className="w-3.5 h-3.5 text-teal-400" />
+                          <span>Search Indexed Chunks</span>
+                        </span>
+                        <span className="text-[10px] opacity-70 font-mono">({metadataCounts.indexed})</span>
                       </button>
                     </li>
                   </ul>
@@ -947,6 +1137,18 @@ export default function Dashboard() {
                   </ul>
                 </div>
 
+                {categoryFilter !== 'all' && (
+                  <button
+                    type="button"
+                    onClick={() => setCategoryFilter('all')}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-all cursor-pointer shadow-sm"
+                    title="Clear filter"
+                  >
+                    <span>{getCategoryFilterLabel()}</span>
+                    <Cross2Icon className="w-3 h-3" />
+                  </button>
+                )}
+
                 <span className="ml-auto text-xs font-medium text-muted-foreground">
                   Showing {filteredFiles.length} {filteredFiles.length === 1 ? 'file' : 'files'}
                 </span>
@@ -1009,6 +1211,7 @@ export default function Dashboard() {
                       isProcessing={processingFiles.has(file._id || '')}
                       onDelete={handleDelete}
                       onOpenVersionHistory={handleOpenVersionHistory}
+                      onTagClick={(tag) => setCategoryFilter(`tag:${tag.toLowerCase()}`)}
                       onShare={(f) => {
                         setShareModalFile(f);
                         setIsShareModalOpen(true);
@@ -1082,6 +1285,16 @@ export default function Dashboard() {
         onCancel={handleDuplicateCancel}
         onUploadAnyway={handleDuplicateUploadAnyway}
         onRenameAndSave={handleDuplicateRenameAndSave}
+        isUploading={uploading}
+      />
+
+      {/* Pre-Upload Rename Modal (Intercepts random or machine-generated filenames before upload) */}
+      <PreUploadRenameModal
+        isOpen={isPreUploadRenameOpen}
+        incomingFile={pendingRenameFile}
+        onCancel={handleCancelPreUploadRename}
+        onConfirmRename={handleConfirmPreUploadRename}
+        onUploadAsOriginal={handleUploadAsOriginal}
         isUploading={uploading}
       />
 
