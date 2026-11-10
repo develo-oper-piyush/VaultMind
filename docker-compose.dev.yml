@@ -5,37 +5,54 @@ services:
         build:
             context: ./Backend
             dockerfile: Dockerfile
+            target: development
         container_name: vaultmind-backend-dev
-        command: npm run dev
+        restart: unless-stopped
         ports:
             - "5000:5000"
         volumes:
             - ./Backend:/app
             - /app/node_modules
         env_file:
-            - path: ./Backend/env
+            - path: .env
+              required: false
+            - path: ./Backend/.env
               required: false
         environment:
             - PORT=5000
             - FRONTEND_URL=http://localhost:3000
             - NODE_ENV=development
+        networks:
+            - vaultmind-dev-net
 
     frontend-dev:
         build:
             context: ./Frontend
             dockerfile: Dockerfile
+            target: development
             args:
                 NEXT_PUBLIC_API_URL: http://localhost:5000/api
         container_name: vaultmind-frontend-dev
-        command: npm run dev -- -p 3000
+        restart: unless-stopped
         ports:
             - "3000:3000"
         volumes:
             - ./Frontend:/app
             - /app/node_modules
             - /app/.next
+        env_file:
+            - path: .env
+              required: false
+            - path: ./Frontend/.env.local
+              required: false
         environment:
             - NODE_ENV=development
             - NEXT_PUBLIC_API_URL=http://localhost:5000/api
         depends_on:
             - backend-dev
+        networks:
+            - vaultmind-dev-net
+
+networks:
+    vaultmind-dev-net:
+        driver: bridge

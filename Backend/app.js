@@ -48,6 +48,15 @@ app.use(fileUpload());
 app.use(express.static("public"));
 app.use(cookieParser());
 
+// Healthcheck endpoints for Docker container orchestration & monitoring
+app.get(["/health", "/api/health"], (req, res) => {
+    res.status(200).json({
+        status: "healthy",
+        uptime: Math.floor(process.uptime()),
+        timestamp: new Date().toISOString(),
+    });
+});
+
 // Routers with flexible base paths
 app.use("/files", indexRouter);
 app.use("/api/files", indexRouter);

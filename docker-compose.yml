@@ -5,12 +5,15 @@ services:
         build:
             context: ./Backend
             dockerfile: Dockerfile
+            target: production
         container_name: vaultmind-backend
         restart: unless-stopped
         ports:
             - "5000:5000"
         env_file:
-            - path: ./Backend/env
+            - path: .env
+              required: false
+            - path: ./Backend/.env
               required: false
         environment:
             - PORT=5000
@@ -20,26 +23,69 @@ services:
             test:
                 [
                     "CMD-SHELL",
-                    "wget --no-verbose --tries=1 --spider http://localhost:5000/ || exit 1",
+                    "wget --no-verbose --tries=1 --spider http://127.0.0.1:5000/health || exit 1",
                 ]
             interval: 10s
             timeout: 5s
-            retries: 3
-            start_period: 5s
+            retries: 5
+            start_period: 15s
+        networks:
+            - vaultmind-net
 
     frontend:
         build:
             context: ./Frontend
             dockerfile: Dockerfile
+            target: runner
             args:
-                NEXT_PUBLIC_API_URL: http://localhost:5000/api
+                NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5000/api}
         container_name: vaultmind-frontend
         restart: unless-stopped
         ports:
             - "3000:3000"
+        env_file:
+            - path: .env
+              required: false
+            - path: ./Frontend/.env.local
+              required: false
         environment:
             - NODE_ENV=production
-            - NEXT_PUBLIC_API_URL=http://localhost:5000/api
+            - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:5000/api}
+        healthcheck:
+            test:
+                [
+                    "CMD-SHELL",
+                    "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/ || exit 1",
+                ]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 15s
         depends_on:
             backend:
                 condition: service_healthy
+        networks:
+            - vaultmind-net
+
+    # Optional local MongoDB service (Run with: docker compose --profile local-db up)
+    mongodb:
+        image: mongo:7-alpine
+        container_name: vaultmind-mongodb
+        restart: unless-stopped
+        profiles:
+            - local-db
+        ports:
+            - "27017:27017"
+        volumes:
+            - mongodb_data:/data/db
+        environment:
+            - MONGO_INITDB_DATABASE=drive-db
+        networks:
+            - vaultmind-net
+
+networks:
+    vaultmind-net:
+        driver: bridge
+
+volumes:
+    mongodb_data:
