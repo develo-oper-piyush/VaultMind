@@ -93,8 +93,9 @@ export default function PhotosPage() {
   // Format image items for Carousel & Gallery views
   const userPhotoItems = photoFiles.map((f) => {
     let rawUrl = f.url;
-    if (rawUrl && rawUrl.includes('localhost:5000')) {
-      rawUrl = rawUrl.replace('localhost:5000', 'localhost:3000');
+    // If rawUrl contains localhost or 127.0.0.1 from local development, resolve dynamically via apiClient
+    if (rawUrl && (rawUrl.includes('localhost') || rawUrl.includes('127.0.0.1'))) {
+      rawUrl = undefined;
     }
     let finalUrl = rawUrl && rawUrl.startsWith('http') ? rawUrl : apiClient.getFileUrl(f.name);
     if (typeof window !== 'undefined') {

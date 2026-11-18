@@ -98,7 +98,7 @@ router.get("/home", authMiddleware, async (req, res) => {
         });
 
         // Use internal secure routes instead of direct Supabase URLs
-        const baseUrl = process.env.BACKEND_URL || (process.env.PORT ? `http://localhost:${process.env.PORT}` : "http://localhost:3000");
+        const baseUrl = process.env.BACKEND_URL || (req.protocol && req.get ? `${req.protocol}://${req.get("host")}` : (process.env.PORT ? `http://localhost:${process.env.PORT}` : "http://localhost:3000"));
         const filesWithUrls = activeFiles.map((file) => {
             const meta = metadataMap[file.name] || {};
             return {
@@ -681,7 +681,7 @@ router.post("/search", authMiddleware, async (req, res) => {
         const results = await searchFiles(userId, query.trim());
 
         // Fetch Supabase metadata for URLs
-        const baseUrl = process.env.BACKEND_URL || (process.env.PORT ? `http://localhost:${process.env.PORT}` : "http://localhost:3000");
+        const baseUrl = process.env.BACKEND_URL || (req.protocol && req.get ? `${req.protocol}://${req.get("host")}` : (process.env.PORT ? `http://localhost:${process.env.PORT}` : "http://localhost:3000"));
         const resultsWithUrls = results.map((file) => ({
             _id: file._id,
             name: file.fileName,

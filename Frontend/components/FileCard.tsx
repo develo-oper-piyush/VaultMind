@@ -64,8 +64,9 @@ const FileCard = React.forwardRef<HTMLDivElement, FileCardProps>(
 
     const fileUrl = React.useMemo(() => {
       let rawUrl = file.url;
-      if (rawUrl && rawUrl.includes("localhost:5000")) {
-        rawUrl = rawUrl.replace("localhost:5000", "localhost:3000");
+      // If rawUrl contains localhost or 127.0.0.1 from local development, resolve dynamically via apiClient
+      if (rawUrl && (rawUrl.includes("localhost") || rawUrl.includes("127.0.0.1"))) {
+        rawUrl = undefined;
       }
       let url = rawUrl?.startsWith("http") ? rawUrl : apiClient.getFileUrl(file.name);
       if (typeof window !== "undefined") {
