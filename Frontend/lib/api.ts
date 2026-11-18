@@ -11,7 +11,11 @@ import type {
 } from '@/types';
 
 // API Configuration
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const normalizeApiUrl = (url?: string) => {
+  if (!url) return 'http://localhost:5000/api';
+  return url.trim().replace(/\/+$/, '');
+};
+const API_BASE_URL = normalizeApiUrl(process.env.NEXT_PUBLIC_API_URL);
 
 // API Client
 class ApiClient {
