@@ -27,10 +27,14 @@ class ApiClient {
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
 
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
     const config: RequestInit = {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
         ...options.headers,
       },
       credentials: 'include', // Include cookies
@@ -112,9 +116,15 @@ class ApiClient {
       formData.append('allowDuplicate', 'true');
     }
 
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
     const response = await fetch(`${this.baseURL}/files/upload-file`, {
       method: 'POST',
       body: formData,
+      headers: {
+        ...authHeaders,
+      },
       credentials: 'include',
     });
 
@@ -215,7 +225,9 @@ class ApiClient {
   }
 
   getFileUrl(fileName: string) {
-    return `${this.baseURL}/files/secure-file/${encodeURIComponent(fileName)}`;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const url = `${this.baseURL}/files/secure-file/${encodeURIComponent(fileName)}`;
+    return token ? `${url}?token=${encodeURIComponent(token)}` : url;
   }
 
   // Recycle Bin Endpoints
@@ -336,11 +348,17 @@ class ApiClient {
       formData.append('changeSummary', changeSummary);
     }
 
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
     const response = await fetch(
       `${this.baseURL}/files/${encodeURIComponent(fileId)}/versions`,
       {
         method: 'POST',
         body: formData,
+        headers: {
+          ...authHeaders,
+        },
         credentials: 'include',
       }
     );

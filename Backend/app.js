@@ -18,9 +18,12 @@ connectToDB();
 
 const app = express();
 
+// Trust reverse proxy (Essential for Render / Cloudflare to handle HTTPS cookies & rate limiting correctly)
+app.set("trust proxy", 1);
+
 // CORS Middleware to allow requests from Frontend
 app.use((req, res, next) => {
-    const allowedOrigin = process.env.FRONTEND_URL || "http://localhost:3001";
+    const allowedOrigin = process.env.FRONTEND_URL || "http://localhost:3000";
     const origin = req.headers.origin;
     if (origin) {
         res.setHeader("Access-Control-Allow-Origin", origin);
@@ -35,6 +38,10 @@ app.use((req, res, next) => {
     res.setHeader(
         "Access-Control-Allow-Headers",
         "Origin, X-Requested-With, Content-Type, Accept, Authorization",
+    );
+    res.setHeader(
+        "Access-Control-Expose-Headers",
+        "Content-Disposition",
     );
     if (req.method === "OPTIONS") {
         return res.sendStatus(200);
