@@ -235,8 +235,9 @@ docker compose --profile local-db up --build -d
 
 ---
 
-## 👨‍💻 Author
+## 👨‍💻 Team Members
 
-**Piyush Chaudhary**
-
-- GitHub: [@develo-oper-piyush](https://github.com/develo-oper-piyush)
+- [Piyush Chaudhary](https://github.com/develo-oper-piyush)
+- [Rishik Goel](https://github.com/RishikGoel)
+- [Rahul Singh](https://github.com/rxhulsingh16)
+- [Sahil Singh](https://github.com/Sahil-Singhhh)
